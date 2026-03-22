@@ -1473,8 +1473,11 @@ function getMonthLabel() { return MONTHS[state.currentMonth] + ' ' + state.curre
 
 function currentMonthTx() {
   return state.transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getMonth() === state.currentMonth && d.getFullYear() === state.currentYear;
+    // Parse YYYY-MM-DD directly to avoid UTC timezone shifting the date
+    const parts = t.date.split('-');
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[0], 10);
+    return month === state.currentMonth && year === state.currentYear;
   });
 }
 
@@ -1497,7 +1500,11 @@ const CAT_EMOJI = {
 
 // ── Format ─────────────────────────────────────────────────
 function fmt(n) { return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmtDate(d) { return new Date(d).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'2-digit'}); }
+function fmtDate(d) {
+  const parts = d.split('-');
+  const local = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  return local.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'2-digit'});
+}
 
 // ── Render ─────────────────────────────────────────────────
 function renderAll() {
@@ -1748,6 +1755,12 @@ function addEntry() {
   }
 
   state.transactions.push({ id: Date.now().toString(), type: state.entryType, name, amount, category, date });
+
+  // Auto-navigate to the month of the entry so it's immediately visible
+  const parts = date.split('-');
+  state.currentMonth = parseInt(parts[1], 10) - 1;
+  state.currentYear = parseInt(parts[0], 10);
+
   save();
   closeModal('addModal');
   renderAll();
