@@ -2097,7 +2097,7 @@ All transactions: ${JSON.stringify(txs.map(t=>({type:t.type,name:t.name,amount:t
 // Direct API calls are blocked by browsers (CORS).
 // Set your Cloudflare Worker proxy URL below after setup.
 // Instructions: see bottom of this file.
-const AI_PROXY_URL = ''; // e.g. 'https://ledger-ai.YOUR-NAME.workers.dev'
+const AI_PROXY_URL = 'https://ledger-ai.alfarazbatcha.workers.dev'; 
 
 async function callAI(system, userMsg) {
   if (!AI_PROXY_URL) {
