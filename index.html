@@ -1066,7 +1066,7 @@
             </div>
             <div id="donut-content">
               <div style="display:flex;justify-content:center;margin-bottom:16px;position:relative;">
-                <canvas id="donutChart" width="180" height="180" style="width:180px;height:180px;"></canvas>
+                <canvas id="donutChart" style="display:block;margin:0 auto;"></canvas>
                 <div id="donut-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
                   <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:var(--text);" id="donut-total"></div>
                   <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total</div>
@@ -1682,12 +1682,24 @@ function currentMonthTx() {
 
 // ── Categories ─────────────────────────────────────────────
 const CAT_COLORS = {
-  'Food & Dining': '#f0c070','Transportation': '#7ec8a0','Entertainment': '#a78bfa',
-  'Shopping': '#f47c7c','Healthcare': '#60a5fa','Subscriptions': '#fb923c',
-  'Education': '#34d399','Utilities': '#94a3b8','Personal Care': '#f9a8d4',
-  'Travel': '#22d3ee','Housing': '#b5e550','Charity': '#f472b6','Other': '#6b7a6d',
-  'Salary': '#7ec8a0','Freelance': '#b5e550','Investment': '#60a5fa',
-  'Gift': '#f9a8d4','Other Income': '#94a3b8'
+  'Food & Dining': '#f59e0b',
+  'Transportation': '#10b981',
+  'Entertainment': '#8b5cf6',
+  'Shopping': '#ef4444',
+  'Healthcare': '#3b82f6',
+  'Subscriptions': '#ec4899',
+  'Education': '#06b6d4',
+  'Utilities': '#64748b',
+  'Personal Care': '#f97316',
+  'Travel': '#0ea5e9',
+  'Housing': '#6366f1',
+  'Charity': '#d946ef',
+  'Other': '#94a3b8',
+  'Salary': '#10b981',
+  'Freelance': '#6366f1',
+  'Investment': '#3b82f6',
+  'Gift': '#ec4899',
+  'Other Income': '#64748b'
 };
 
 const CAT_EMOJI = {
@@ -1752,70 +1764,86 @@ function renderStats() {
 function renderDonut() {
   const txs = currentMonthTx().filter(t=>t.type==='expense');
   const canvas = document.getElementById('donutChart');
+  if (!canvas) return;
+
+  // Force perfect square — 200x200 logical pixels, hi-dpi aware
+  const DPR = window.devicePixelRatio || 1;
+  const SIZE = 200;
+  canvas.width  = SIZE * DPR;
+  canvas.height = SIZE * DPR;
+  canvas.style.width  = SIZE + 'px';
+  canvas.style.height = SIZE + 'px';
+
   const ctx = canvas.getContext('2d');
-  const SIZE = 180, CX = 90, CY = 90, R_OUT = 80, R_IN = 52;
+  ctx.scale(DPR, DPR);
   ctx.clearRect(0, 0, SIZE, SIZE);
+
+  const CX = SIZE / 2, CY = SIZE / 2;
+  const R_OUT = 88, R_IN = 58;
 
   // Group by category
   const cats = {};
   txs.forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
   const total = Object.values(cats).reduce((s,v)=>s+v, 0);
-  const legend = document.getElementById('donutLegend');
-  const emptyEl = document.getElementById('donut-empty');
-  const contentEl = document.getElementById('donut-content');
+
+  const legend   = document.getElementById('donutLegend');
+  const emptyEl  = document.getElementById('donut-empty');
+  const contentEl= document.getElementById('donut-content');
   const monthLbl = document.getElementById('donut-month-label');
   if (monthLbl) monthLbl.textContent = getMonthLabel();
 
   if (total === 0) {
-    if (emptyEl) emptyEl.style.display = 'block';
+    if (emptyEl)   emptyEl.style.display   = 'block';
     if (contentEl) contentEl.style.display = 'none';
-    // Draw empty ring
-    ctx.strokeStyle = '#e3e8f5'; ctx.lineWidth = 28;
-    ctx.beginPath(); ctx.arc(CX, CY, (R_OUT+R_IN)/2, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = '#e3e8f5';
+    ctx.lineWidth   = R_OUT - R_IN;
+    ctx.beginPath();
+    ctx.arc(CX, CY, (R_OUT + R_IN) / 2, 0, Math.PI * 2);
+    ctx.stroke();
     return;
   }
 
-  if (emptyEl) emptyEl.style.display = 'none';
+  if (emptyEl)   emptyEl.style.display   = 'none';
   if (contentEl) contentEl.style.display = 'block';
 
   const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let angle = -Math.PI / 2;
-  const GAP = 0.03;
+  const GAP = 0.025; // gap between segments in radians
 
   entries.forEach(([cat, val]) => {
-    const slice = (val/total) * Math.PI * 2;
-    const color = CAT_COLORS[cat] || '#8b93b8';
+    const slice = (val / total) * Math.PI * 2;
+    if (slice < 0.001) return;
+    const color = CAT_COLORS[cat] || '#94a3b8';
+    const a1 = angle + GAP / 2;
+    const a2 = angle + slice - GAP / 2;
 
-    // Draw arc segment
     ctx.beginPath();
-    ctx.moveTo(CX, CY);
-    ctx.arc(CX, CY, R_OUT, angle + GAP/2, angle + slice - GAP/2);
-    ctx.arc(CX, CY, R_IN, angle + slice - GAP/2, angle + GAP/2, true);
+    ctx.arc(CX, CY, R_OUT, a1, a2);
+    ctx.arc(CX, CY, R_IN,  a2, a1, true);
     ctx.closePath();
     ctx.fillStyle = color;
     ctx.fill();
-
-    // Subtle shadow effect
-    ctx.shadowColor = 'rgba(0,0,0,0.06)';
-    ctx.shadowBlur = 4;
     angle += slice;
   });
-  ctx.shadowBlur = 0;
 
-  // Center total
+  // Center total text
   const totalEl = document.getElementById('donut-total');
   if (totalEl) totalEl.textContent = fmt(total);
 
-  // Legend - grid of 2 columns
-  legend.innerHTML = entries.slice(0,6).map(([cat,val]) => {
-    const pct = Math.round((val/total)*100);
-    const color = CAT_COLORS[cat] || '#8b93b8';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface2);border-radius:8px;">
-      <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></div>
-      <span style="font-size:11px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cat}</span>
-      <span style="font-size:11px;font-weight:700;color:var(--muted);">${pct}%</span>
+  // Legend — 2 columns, show category + amount + %
+  legend.innerHTML = entries.slice(0, 8).map(([cat, val]) => {
+    const pct   = Math.round((val / total) * 100);
+    const color = CAT_COLORS[cat] || '#94a3b8';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface2);border-radius:8px;">
+      <div style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+      <span style="font-size:11px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);">${cat}</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text);margin-right:2px;">${fmt(val)}</span>
+      <span style="font-size:10px;font-weight:600;color:var(--muted);min-width:28px;text-align:right;">${pct}%</span>
     </div>`;
-  }).join('');
+  }).join('') +
+  (entries.length > 8
+    ? `<div style="font-size:11px;color:var(--muted);text-align:center;padding:4px;font-weight:600;">+${entries.length-8} more categories</div>`
+    : '');
 }
 
 function renderTrendChart() {
