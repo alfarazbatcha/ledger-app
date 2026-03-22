@@ -2057,6 +2057,21 @@ function addEntry() {
 
   state.transactions.push({ id: Date.now().toString(), type: state.entryType, name, amount, category, date });
 
+  // Warn if possible duplicate (same date + amount + type already exists)
+  const dupes = state.transactions.filter(t =>
+    t.date === date &&
+    Math.abs(t.amount - amount) < 0.01 &&
+    t.type === state.entryType
+  );
+  if (dupes.length > 1) {
+    if (!confirm(`⚠ A similar transaction already exists:\n"${dupes[0].name}" · $${dupes[0].amount.toFixed(2)} · ${date}\n\nDo you still want to add this entry?`)) {
+      state.transactions.pop(); // remove the one we just added
+      save();
+      renderAll();
+      return;
+    }
+  }
+
   // Auto-navigate to the month of the entry so it's immediately visible
   const parts = date.split('-');
   state.currentMonth = parseInt(parts[1], 10) - 1;
@@ -2624,15 +2639,16 @@ function renderCSVPreview() {
     <span>✓</span>
   </div>` +
     state.csvRows.map((r,i) => {
-      // Format date nicely
       const parts = r.date.split('-');
       const dispDate = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0].slice(2)}` : r.date;
-      return `<div class="csv-preview-row">
+      const dup = isDuplicate(r.date, r.amount, r.type);
+      if (dup) r.selected = false; // auto-uncheck duplicates
+      return `<div class="csv-preview-row" style="${dup?'opacity:0.5;background:#fef2f2;border-radius:6px;':''}">
         <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">${dispDate}</span>
-        <span style="font-size:12px;font-weight:500;" title="${r.name}">${r.name.slice(0,26)}${r.name.length>26?'…':''}</span>
+        <span style="font-size:12px;font-weight:500;" title="${r.name}">${r.name.slice(0,26)}${r.name.length>26?'…':''}${dup?' <span style="font-size:10px;background:#fecaca;color:#dc2626;padding:1px 5px;border-radius:4px;font-weight:700;">DUP</span>':''}</span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:${r.type==='income'?'var(--income-color)':'var(--expense-color)'};">${r.type==='income'?'+':'-'}$${r.amount.toFixed(2)}</span>
         <select class="csv-cat-col" onchange="state.csvRows[${i}].category=this.value">${catOptions(r.type)}</select>
-        <input type="checkbox" ${r.selected?'checked':''} onchange="state.csvRows[${i}].selected=this.checked">
+        <input type="checkbox" ${r.selected&&!dup?'checked':''} onchange="state.csvRows[${i}].selected=this.checked">
       </div>`;
     }).join('');
 }
@@ -2650,16 +2666,44 @@ function selectAllCSV(val) {
   renderCSVPreview();
 }
 
+// ── Duplicate Detection ────────────────────────────────────
+function isDuplicate(date, amount, type) {
+  const normalDate = normalizeDate(date);
+  return state.transactions.some(t =>
+    t.date === normalDate &&
+    Math.abs(t.amount - Math.abs(amount)) < 0.01 &&
+    t.type === type
+  );
+}
+
 function importSelectedCSV() {
   const selected = state.csvRows.filter(r=>r.selected);
   if (!selected.length) { alert('No rows selected.'); return; }
+
+  let imported = 0, skipped = 0, duplicates = [];
+
   selected.forEach(r => {
-    state.transactions.push({ id: Date.now().toString()+Math.random(), type: r.type, name: r.name, amount: r.amount, category: r.category, date: normalizeDate(r.date) });
+    const normalDate = normalizeDate(r.date);
+    if (isDuplicate(r.date, r.amount, r.type)) {
+      duplicates.push(`${r.name} · $${r.amount.toFixed(2)} · ${normalDate}`);
+      skipped++;
+    } else {
+      state.transactions.push({ id: Date.now().toString()+Math.random(), type: r.type, name: r.name, amount: r.amount, category: r.category, date: normalDate });
+      imported++;
+    }
   });
+
   save();
   document.getElementById('csv-preview-wrap').style.display = 'none';
   state.csvRows = [];
-  alert(`✓ Imported ${selected.length} transactions!`);
+
+  if (skipped > 0) {
+    const dupList = duplicates.slice(0,5).join('\n');
+    const more = duplicates.length > 5 ? `\n...and ${duplicates.length-5} more` : '';
+    alert(`✓ Imported ${imported} transactions.\n\n⚠ Skipped ${skipped} duplicate${skipped>1?'s':''}:\n${dupList}${more}`);
+  } else {
+    alert(`✓ Imported ${imported} transactions!`);
+  }
   renderAll();
 }
 
