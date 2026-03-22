@@ -1273,6 +1273,7 @@
                   <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(true)">Select All</button>
                   <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(false)">None</button>
                   <button class="btn btn-primary" style="padding:6px 14px;font-size:12px;" onclick="importSelectedCSV()">Import Selected</button>
+                  <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="clearCSVPreview()">✕ Cancel</button>
                 </div>
               </div>
               <div class="csv-preview" id="csv-preview"></div>
@@ -2587,8 +2588,8 @@ function parseCSVText(text) {
       date: cols[dateIdx >= 0 ? dateIdx : 0] || new Date().toISOString().split('T')[0],
       name: cols[descIdx >= 0 ? descIdx : 1] || 'Transaction',
       amount: Math.abs(amt),
-      type: amt < 0 ? 'expense' : 'income',
-      category: amt < 0 ? 'Other' : 'Other Income',
+      type: amt > 0 ? 'expense' : 'income',
+      category: amt > 0 ? 'Other' : 'Other Income',
       selected: true
     });
   }
@@ -2620,6 +2621,14 @@ function renderCSVPreview() {
         <input type="checkbox" ${r.selected?'checked':''} onchange="state.csvRows[${i}].selected=this.checked">
       </div>`
     ).join('');
+}
+
+function clearCSVPreview() {
+  state.csvRows = [];
+  document.getElementById('csv-preview-wrap').style.display = 'none';
+  document.getElementById('csv-preview').innerHTML = '';
+  document.getElementById('csvFileInput').value = '';
+  document.getElementById('csvPasteArea').value = '';
 }
 
 function selectAllCSV(val) {
