@@ -1021,16 +1021,25 @@
       </div>
 
       <div class="grid-2" style="margin-bottom:20px;">
+        <!-- Improved Donut Chart -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Expense Breakdown</span>
+            <span class="card-title">📊 Expenses by Category</span>
+            <span style="font-size:12px;color:var(--muted);font-weight:600;" id="donut-month-label"></span>
           </div>
           <div class="card-body">
-            <div class="donut-wrap">
-              <canvas id="donutChart" width="140" height="140" style="width:140px;height:140px;flex-shrink:0;"></canvas>
-              <div class="donut-legend" id="donutLegend">
-                <div class="empty-state" style="padding:10px;"><p>No expenses yet</p></div>
+            <div id="donut-empty" class="empty-state" style="display:none;padding:20px;">
+              <div class="empty-icon">🍩</div><p>No expenses this month</p>
+            </div>
+            <div id="donut-content">
+              <div style="display:flex;justify-content:center;margin-bottom:16px;position:relative;">
+                <canvas id="donutChart" width="180" height="180" style="width:180px;height:180px;"></canvas>
+                <div id="donut-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+                  <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:var(--text);" id="donut-total"></div>
+                  <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total</div>
+                </div>
               </div>
+              <div id="donutLegend" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
             </div>
           </div>
         </div>
@@ -1040,9 +1049,27 @@
             <span class="card-title">Recent Transactions</span>
             <span class="tag" onclick="showPage('transactions', document.querySelector('.nav-item:nth-child(2)'));" style="cursor:pointer;">View all →</span>
           </div>
-          <div class="card-body" id="recent-list" style="max-height:220px;overflow-y:auto;">
+          <div class="card-body" id="recent-list" style="max-height:280px;overflow-y:auto;">
             <div class="empty-state"><div class="empty-icon">📋</div><p>No transactions yet</p></div>
           </div>
+        </div>
+      </div>
+
+      <!-- 6-Month Trend Chart -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header">
+          <span class="card-title">📈 6-Month Spending Trend</span>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <span style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--income-color);">
+              <span style="width:10px;height:10px;border-radius:50%;background:var(--income-color);display:inline-block;"></span>Income
+            </span>
+            <span style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--expense-color);">
+              <span style="width:10px;height:10px;border-radius:50%;background:var(--expense-color);display:inline-block;"></span>Expenses
+            </span>
+          </div>
+        </div>
+        <div class="card-body" style="padding-bottom:12px;">
+          <canvas id="trendChart" height="120" style="width:100%;height:120px;"></canvas>
         </div>
       </div>
 
@@ -1636,6 +1663,7 @@ function renderAll() {
   updateMonthLabels();
   renderStats();
   renderDonut();
+  renderTrendChart();
   renderRecent();
   renderTransactionLists();
   renderBudgets();
@@ -1678,48 +1706,151 @@ function renderDonut() {
   const txs = currentMonthTx().filter(t=>t.type==='expense');
   const canvas = document.getElementById('donutChart');
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0,0,140,140);
+  const SIZE = 180, CX = 90, CY = 90, R_OUT = 80, R_IN = 52;
+  ctx.clearRect(0, 0, SIZE, SIZE);
 
   // Group by category
   const cats = {};
-  txs.forEach(t => cats[t.category] = (cats[t.category] || 0) + t.amount);
+  txs.forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
   const total = Object.values(cats).reduce((s,v)=>s+v, 0);
-
   const legend = document.getElementById('donutLegend');
+  const emptyEl = document.getElementById('donut-empty');
+  const contentEl = document.getElementById('donut-content');
+  const monthLbl = document.getElementById('donut-month-label');
+  if (monthLbl) monthLbl.textContent = getMonthLabel();
 
   if (total === 0) {
-    ctx.strokeStyle = 'var(--border)'; ctx.lineWidth = 14;
-    ctx.beginPath(); ctx.arc(70,70,50,0,Math.PI*2); ctx.stroke();
-    legend.innerHTML = '<div class="empty-state" style="padding:10px;"><p>No expenses</p></div>';
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (contentEl) contentEl.style.display = 'none';
+    // Draw empty ring
+    ctx.strokeStyle = '#e3e8f5'; ctx.lineWidth = 28;
+    ctx.beginPath(); ctx.arc(CX, CY, (R_OUT+R_IN)/2, 0, Math.PI*2); ctx.stroke();
     return;
   }
 
-  let angle = -Math.PI / 2;
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (contentEl) contentEl.style.display = 'block';
+
   const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  let angle = -Math.PI / 2;
+  const GAP = 0.03;
+
   entries.forEach(([cat, val]) => {
-    const slice = (val / total) * Math.PI * 2;
+    const slice = (val/total) * Math.PI * 2;
+    const color = CAT_COLORS[cat] || '#8b93b8';
+
+    // Draw arc segment
     ctx.beginPath();
-    ctx.moveTo(70,70);
-    ctx.arc(70,70,54,angle,angle+slice);
-    ctx.fillStyle = CAT_COLORS[cat] || '#6b7a6d';
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, R_OUT, angle + GAP/2, angle + slice - GAP/2);
+    ctx.arc(CX, CY, R_IN, angle + slice - GAP/2, angle + GAP/2, true);
+    ctx.closePath();
+    ctx.fillStyle = color;
     ctx.fill();
+
+    // Subtle shadow effect
+    ctx.shadowColor = 'rgba(0,0,0,0.06)';
+    ctx.shadowBlur = 4;
     angle += slice;
   });
+  ctx.shadowBlur = 0;
 
-  // Donut hole
-  ctx.beginPath();
-  ctx.arc(70,70,34,0,Math.PI*2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
+  // Center total
+  const totalEl = document.getElementById('donut-total');
+  if (totalEl) totalEl.textContent = fmt(total);
 
-  // Legend
-  legend.innerHTML = entries.slice(0,5).map(([cat,val]) =>
-    `<div class="legend-item">
-      <div class="legend-dot" style="background:${CAT_COLORS[cat]||'#6b7a6d'}"></div>
-      <span style="font-size:12px;">${CAT_EMOJI[cat]||'📝'} ${cat}</span>
-      <span class="legend-pct">${Math.round((val/total)*100)}%</span>
-    </div>`
-  ).join('') + (entries.length > 5 ? `<div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:4px;">+${entries.length-5} more</div>` : '');
+  // Legend - grid of 2 columns
+  legend.innerHTML = entries.slice(0,6).map(([cat,val]) => {
+    const pct = Math.round((val/total)*100);
+    const color = CAT_COLORS[cat] || '#8b93b8';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface2);border-radius:8px;">
+      <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+      <span style="font-size:11px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cat}</span>
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderTrendChart() {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 600;
+  const H = 120;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  // Build last 6 months data
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    let m = state.currentMonth - i;
+    let y = state.currentYear;
+    if (m < 0) { m += 12; y--; }
+    const txs = state.transactions.filter(t => {
+      const parts = t.date.split('-');
+      return parseInt(parts[1])-1 === m && parseInt(parts[0]) === y;
+    });
+    const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    months.push({ label: MONTHS[m].slice(0,3), income, expense });
+  }
+
+  const maxVal = Math.max(...months.map(m=>Math.max(m.income,m.expense)), 1);
+  const PAD_L = 10, PAD_R = 10, PAD_T = 12, PAD_B = 28;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+  const barW = Math.floor(chartW / months.length);
+  const groupW = barW - 8;
+  const singleW = Math.floor(groupW / 2) - 2;
+
+  // Draw gridlines
+  ctx.strokeStyle = '#e3e8f5';
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(pct => {
+    const y = PAD_T + chartH * (1 - pct);
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W-PAD_R, y); ctx.stroke();
+  });
+
+  months.forEach((m, i) => {
+    const x = PAD_L + i * barW + 4;
+
+    // Income bar
+    const incomeH = (m.income / maxVal) * chartH;
+    const incomeY = PAD_T + chartH - incomeH;
+    const incomeGrad = ctx.createLinearGradient(0, incomeY, 0, incomeY + incomeH);
+    incomeGrad.addColorStop(0, '#34d399');
+    incomeGrad.addColorStop(1, '#6ee7b7');
+    ctx.fillStyle = incomeGrad;
+    ctx.beginPath();
+    ctx.roundRect(x, incomeY, singleW, incomeH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Expense bar
+    const expH = (m.expense / maxVal) * chartH;
+    const expY = PAD_T + chartH - expH;
+    const expGrad = ctx.createLinearGradient(0, expY, 0, expY + expH);
+    expGrad.addColorStop(0, '#f87171');
+    expGrad.addColorStop(1, '#fca5a5');
+    ctx.fillStyle = expGrad;
+    ctx.beginPath();
+    ctx.roundRect(x + singleW + 2, expY, singleW, expH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Month label
+    ctx.fillStyle = '#8b93b8';
+    ctx.font = '700 10px Plus Jakarta Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.label, x + groupW/2, H - 6);
+
+    // Highlight current month
+    if (i === 5) {
+      ctx.fillStyle = 'rgba(99,102,241,0.06)';
+      ctx.beginPath();
+      ctx.roundRect(x - 2, PAD_T, groupW + 4, chartH, 6);
+      ctx.fill();
+    }
+  });
 }
 
 function renderRecent() {
@@ -1962,6 +2093,30 @@ function buildFinanceContext() {
 All transactions: ${JSON.stringify(txs.map(t=>({type:t.type,name:t.name,amount:t.amount,category:t.category})))}`;
 }
 
+// ── AI Config ──────────────────────────────────────────────
+// Direct API calls are blocked by browsers (CORS).
+// Set your Cloudflare Worker proxy URL below after setup.
+// Instructions: see bottom of this file.
+const AI_PROXY_URL = ''; // e.g. 'https://ledger-ai.YOUR-NAME.workers.dev'
+
+async function callAI(system, userMsg) {
+  if (!AI_PROXY_URL) {
+    return '__NO_PROXY__';
+  }
+  const res = await fetch(AI_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+  const data = await res.json();
+  return data.content?.map(b=>b.text||'').join('') || 'Unable to get response.';
+}
+
 async function askAI(context) {
   const inputId = context === 'dash' ? 'dash-ai-input' : 'insights-ai-input';
   const responseId = context === 'dash' ? 'dash-ai-response' : 'insights-response';
@@ -1972,36 +2127,28 @@ async function askAI(context) {
   responseEl.innerHTML = '<div class="loading-dots" style="padding:10px;"><span></span><span></span><span></span></div>';
   document.getElementById(inputId).value = '';
 
-  const finCtx = buildFinanceContext();
+  if (!AI_PROXY_URL) {
+    responseEl.innerHTML = `<div class="tip warning">⚙️ <strong>AI not connected yet.</strong> A quick one-time setup is needed to enable Claude AI. Check the instructions below the app or ask for help setting up the proxy.</div>`;
+    return;
+  }
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: `You are a personal finance advisor embedded in a finance tracking app. 
+    const text = await callAI(
+      `You are a personal finance advisor embedded in a finance tracking app.
 You help users understand their spending and reduce unnecessary expenses.
 Be concise, practical, and supportive. Format responses with short paragraphs or bullet points.
 When you identify unnecessary expenses or ways to save, be specific and actionable.
 Use dollar amounts when relevant. Keep responses under 250 words.`,
-        messages: [{ role: 'user', content: `${finCtx}\n\nUser question: ${question}` }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.map(b=>b.text||'').join('') || 'Unable to get response.';
+      `${buildFinanceContext()}\n\nUser question: ${question}`
+    );
     responseEl.innerHTML = formatAIResponse(text);
   } catch(e) {
-    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your connection.</div>';
+    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your connection and proxy URL.</div>';
   }
 }
 
 async function generateFullInsights() {
   const responseEl = document.getElementById('insights-response');
-  responseEl.innerHTML = '<div class="loading-dots" style="padding:10px;"><span></span><span></span><span></span></div>';
-
-  const finCtx = buildFinanceContext();
   const txs = currentMonthTx();
 
   if (!txs.length) {
@@ -2009,26 +2156,25 @@ async function generateFullInsights() {
     return;
   }
 
+  if (!AI_PROXY_URL) {
+    responseEl.innerHTML = `<div class="tip warning">⚙️ <strong>AI not connected yet.</strong> A quick one-time setup is needed to enable Claude AI. Ask for help setting up the Cloudflare Worker proxy.</div>`;
+    return;
+  }
+
+  responseEl.innerHTML = '<div class="loading-dots" style="padding:10px;"><span></span><span></span><span></span></div>';
+
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: `You are a sharp personal finance advisor. Analyze the user's financial data and provide:
+    const text = await callAI(
+      `You are a sharp personal finance advisor. Analyze the user's financial data and provide:
 1. A quick financial health summary (1-2 sentences)
 2. Top 2-3 unnecessary or reducible expenses with specific suggestions
 3. One actionable savings tip for this month
 Be specific, use their actual numbers, and be encouraging but honest. Keep it under 300 words. Do not use markdown headers.`,
-        messages: [{ role: 'user', content: `Please analyze my finances and help me reduce unnecessary expenses:\n${finCtx}` }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.map(b=>b.text||'').join('') || 'Unable to get response.';
+      `Please analyze my finances and help me reduce unnecessary expenses:\n${buildFinanceContext()}`
+    );
     responseEl.innerHTML = formatAIResponse(text);
   } catch(e) {
-    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your connection.</div>';
+    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your proxy URL.</div>';
   }
 }
 
@@ -2484,7 +2630,18 @@ function handleReceiptUpload(input) {
     document.getElementById('receiptDrop').style.display = 'none';
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      if (!AI_PROXY_URL) {
+        document.getElementById('receipt-scanning').style.display = 'none';
+        document.getElementById('receiptDrop').style.display = 'block';
+        alert('AI proxy not set up yet. Please fill in receipt details manually.');
+        // Pre-fill with today's date so user can fill rest manually
+        document.getElementById('r-name').value = 'Receipt';
+        document.getElementById('r-amount').value = '';
+        document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('receipt-result').style.display = 'block';
+        return;
+      }
+      const res = await fetch(AI_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
