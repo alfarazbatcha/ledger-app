@@ -1320,7 +1320,7 @@
                 <select class="form-select" id="r-category" style="flex:1;">
                   <option>Food & Dining</option><option>Shopping</option><option>Transportation</option>
                   <option>Healthcare</option><option>Entertainment</option><option>Utilities</option>
-                  <option>Personal Care</option><option>Other</option>
+                  <option>Personal Care</option><option>Charity</option><option>Other</option>
                 </select>
               </div>
               <div class="receipt-field">
@@ -1448,7 +1448,7 @@
       <select class="form-select" id="note-entry-category">
         <option>Food & Dining</option><option>Transportation</option><option>Shopping</option>
         <option>Entertainment</option><option>Healthcare</option><option>Subscriptions</option>
-        <option>Utilities</option><option>Personal Care</option><option>Other</option>
+        <option>Utilities</option><option>Personal Care</option><option>Charity</option><option>Other</option>
       </select>
     </div>
     <div class="form-group">
@@ -1532,6 +1532,7 @@
         <option value="Utilities">💡 Utilities</option>
         <option value="Personal Care">✨ Personal Care</option>
         <option value="Travel">✈️ Travel</option>
+        <option value="Charity">🤲 Charity</option>
         <option value="Other">📝 Other</option>
       </select>
     </div>
@@ -1564,6 +1565,7 @@
         <option value="Personal Care">✨ Personal Care</option>
         <option value="Travel">✈️ Travel</option>
         <option value="Housing">🏠 Housing</option>
+        <option value="Charity">🤲 Charity</option>
         <option value="Other">📝 Other</option>
       </select>
     </div>
@@ -1683,7 +1685,7 @@ const CAT_COLORS = {
   'Food & Dining': '#f0c070','Transportation': '#7ec8a0','Entertainment': '#a78bfa',
   'Shopping': '#f47c7c','Healthcare': '#60a5fa','Subscriptions': '#fb923c',
   'Education': '#34d399','Utilities': '#94a3b8','Personal Care': '#f9a8d4',
-  'Travel': '#22d3ee','Housing': '#b5e550','Other': '#6b7a6d',
+  'Travel': '#22d3ee','Housing': '#b5e550','Charity': '#f472b6','Other': '#6b7a6d',
   'Salary': '#7ec8a0','Freelance': '#b5e550','Investment': '#60a5fa',
   'Gift': '#f9a8d4','Other Income': '#94a3b8'
 };
@@ -1691,7 +1693,7 @@ const CAT_COLORS = {
 const CAT_EMOJI = {
   'Food & Dining':'🍔','Transportation':'🚗','Entertainment':'🎬','Shopping':'🛍️',
   'Healthcare':'🏥','Subscriptions':'📱','Education':'📚','Utilities':'💡',
-  'Personal Care':'✨','Travel':'✈️','Housing':'🏠','Other':'📝',
+  'Personal Care':'✨','Travel':'✈️','Housing':'🏠','Charity':'🤲','Other':'📝',
   'Salary':'💰','Freelance':'💼','Investment':'📈','Gift':'🎁','Other Income':'📦'
 };
 
@@ -2028,11 +2030,11 @@ function setType(type) {
   // Filter category options
   const sel = document.getElementById('entry-category');
   const incomeCategories = ['Salary','Freelance','Investment','Gift','Other Income'];
-  const expCategories = ['Housing','Food & Dining','Transportation','Entertainment','Shopping','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Other'];
+  const expCategories = ['Housing','Food & Dining','Transportation','Entertainment','Shopping','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Charity','Other'];
   const cats = type === 'income' ? incomeCategories : expCategories;
   const emojis = { 'Salary':'💰','Freelance':'💼','Investment':'📈','Gift':'🎁','Other Income':'📦',
     'Housing':'🏠','Food & Dining':'🍔','Transportation':'🚗','Entertainment':'🎬','Shopping':'🛍️',
-    'Healthcare':'🏥','Subscriptions':'📱','Education':'📚','Utilities':'💡','Personal Care':'✨','Travel':'✈️','Other':'📝' };
+    'Healthcare':'🏥','Subscriptions':'📱','Education':'📚','Utilities':'💡','Personal Care':'✨','Travel':'✈️','Charity':'🤲','Other':'📝' };
   sel.innerHTML = cats.map(c => `<option value="${c}">${emojis[c]} ${c}</option>`).join('');
 }
 
@@ -2632,6 +2634,7 @@ function guessNameCategory(name) {
   if (n.includes('netflix')||n.includes('spotify')||n.includes('amazon prime')||n.includes('apple')||n.includes('google play')||n.includes('subscription')) return 'Subscriptions';
   if (n.includes('hydro')||n.includes('rogers')||n.includes('bell ')||n.includes('telus')||n.includes('enbridge')||n.includes('utility')) return 'Utilities';
   if (n.includes('hotel')||n.includes('airbnb')||n.includes('flight')||n.includes('airline')||n.includes('expedia')) return 'Travel';
+  if (n.includes('charity')||n.includes('donation')||n.includes('donate')||n.includes('masjid')||n.includes('mosque')||n.includes('church')||n.includes('temple')||n.includes('zakat')||n.includes('sadaqa')||n.includes('relief')||n.includes('foundation')||n.includes('nonprofit')) return 'Charity';
   if (n.includes('payment')||n.includes('transfer')||n.includes('e-transfer')) return 'Other Income';
   return 'Other';
 }
@@ -2738,7 +2741,7 @@ function parseCSVText(text) {
   renderCSVPreview();
 }
 
-const EXP_CATS = ['Food & Dining','Transportation','Shopping','Entertainment','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Housing','Other'];
+const EXP_CATS = ['Food & Dining','Transportation','Shopping','Entertainment','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Housing','Charity','Other'];
 const INC_CATS = ['Salary','Freelance','Investment','Gift','Other Income'];
 
 function renderCSVPreview() {
