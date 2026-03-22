@@ -373,7 +373,7 @@
 
   /* Chart */
   .chart-container { position: relative; height: 180px; margin-bottom: 8px; }
-  canvas { width: 100% !important; }
+  #trendChart { width: 100% !important; }
 
   /* Budget bars */
   .budget-item { margin-bottom: 18px; }
@@ -1075,7 +1075,9 @@
             </div>
             <div id="donut-content">
               <div style="display:flex;justify-content:center;margin-bottom:16px;">
-                <canvas id="donutChart" style="display:block;"></canvas>
+                <div style="width:200px;height:200px;flex-shrink:0;">
+                  <canvas id="donutChart" style="display:block;width:200px !important;height:200px !important;"></canvas>
+                </div>
               </div>
               <div id="donutLegend" style="display:flex;flex-direction:column;gap:6px;"></div>
             </div>
