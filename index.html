@@ -360,8 +360,16 @@
     font-size: 14px; opacity: 0; transition: all 0.15s;
   }
 
-  .transaction-item:hover .tx-delete { opacity: 1; }
+  .tx-edit {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 4px; border-radius: 6px;
+    font-size: 15px; opacity: 0; transition: all 0.15s;
+  }
+
+  .transaction-item:hover .tx-delete,
+  .transaction-item:hover .tx-edit { opacity: 1; }
   .tx-delete:hover { color: var(--danger); background: var(--danger-light); }
+  .tx-edit:hover { color: var(--accent); background: var(--accent-light); }
 
   /* Chart */
   .chart-container { position: relative; height: 180px; margin-bottom: 8px; }
@@ -762,6 +770,7 @@
   @media (max-width: 768px) {
     .fab { bottom: calc(80px + env(safe-area-inset-bottom)); right: 20px; width: 50px; height: 50px; font-size: 22px; }
     .fab-menu { bottom: calc(144px + env(safe-area-inset-bottom)); right: 20px; }
+    .tx-edit, .tx-delete { opacity: 1; }
   }
 
   /* ── Responsive breakpoints ──────────────────────────── */
@@ -1062,17 +1071,13 @@
           </div>
           <div class="card-body">
             <div id="donut-empty" class="empty-state" style="display:none;padding:20px;">
-              <div class="empty-icon">🍩</div><p>No expenses this month</p>
+              <div class="empty-icon">📊</div><p>No expenses this month</p>
             </div>
             <div id="donut-content">
-              <div style="display:flex;justify-content:center;margin-bottom:16px;position:relative;">
-                <canvas id="donutChart" style="display:block;margin:0 auto;"></canvas>
-                <div id="donut-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
-                  <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:var(--text);" id="donut-total"></div>
-                  <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total</div>
-                </div>
+              <div style="display:flex;justify-content:center;margin-bottom:16px;">
+                <canvas id="donutChart" style="display:block;"></canvas>
               </div>
-              <div id="donutLegend" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+              <div id="donutLegend" style="display:flex;flex-direction:column;gap:6px;"></div>
             </div>
           </div>
         </div>
@@ -1497,6 +1502,53 @@
   </div>
 </div>
 
+<!-- Edit Transaction Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">Edit Transaction</div>
+    <input type="hidden" id="edit-tx-id">
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="edit-name" placeholder="Description">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input class="form-input" id="edit-amount" type="number" min="0" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="edit-category">
+        <option value="Salary">💰 Salary</option>
+        <option value="Freelance">💼 Freelance</option>
+        <option value="Investment">📈 Investment</option>
+        <option value="Gift">🎁 Gift</option>
+        <option value="Other Income">📦 Other Income</option>
+        <option value="Housing">🏠 Housing</option>
+        <option value="Food & Dining">🍔 Food & Dining</option>
+        <option value="Transportation">🚗 Transportation</option>
+        <option value="Entertainment">🎬 Entertainment</option>
+        <option value="Shopping">🛍️ Shopping</option>
+        <option value="Healthcare">🏥 Healthcare</option>
+        <option value="Subscriptions">📱 Subscriptions</option>
+        <option value="Education">📚 Education</option>
+        <option value="Utilities">💡 Utilities</option>
+        <option value="Personal Care">✨ Personal Care</option>
+        <option value="Travel">✈️ Travel</option>
+        <option value="Charity">🤲 Charity</option>
+        <option value="Other">📝 Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input class="form-input" id="edit-date" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEdit()" style="flex:1;">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeModal('editModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Entry Modal -->
 <div class="modal-overlay" id="addModal">
   <div class="modal">
@@ -1766,8 +1818,27 @@ function renderDonut() {
   const canvas = document.getElementById('donutChart');
   if (!canvas) return;
 
-  // Force perfect square — 200x200 logical pixels, hi-dpi aware
-  const DPR = window.devicePixelRatio || 1;
+  const emptyEl   = document.getElementById('donut-empty');
+  const contentEl = document.getElementById('donut-content');
+  const legend    = document.getElementById('donutLegend');
+  const monthLbl  = document.getElementById('donut-month-label');
+  if (monthLbl) monthLbl.textContent = getMonthLabel();
+
+  // Group by category
+  const cats = {};
+  txs.forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
+  const total = Object.values(cats).reduce((s,v)=>s+v, 0);
+
+  if (total === 0) {
+    if (emptyEl)   emptyEl.style.display   = 'block';
+    if (contentEl) contentEl.style.display = 'none';
+    return;
+  }
+  if (emptyEl)   emptyEl.style.display   = 'none';
+  if (contentEl) contentEl.style.display = 'block';
+
+  // Canvas — perfect square, hi-dpi
+  const DPR  = window.devicePixelRatio || 1;
   const SIZE = 200;
   canvas.width  = SIZE * DPR;
   canvas.height = SIZE * DPR;
@@ -1778,72 +1849,43 @@ function renderDonut() {
   ctx.scale(DPR, DPR);
   ctx.clearRect(0, 0, SIZE, SIZE);
 
-  const CX = SIZE / 2, CY = SIZE / 2;
-  const R_OUT = 88, R_IN = 58;
-
-  // Group by category
-  const cats = {};
-  txs.forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
-  const total = Object.values(cats).reduce((s,v)=>s+v, 0);
-
-  const legend   = document.getElementById('donutLegend');
-  const emptyEl  = document.getElementById('donut-empty');
-  const contentEl= document.getElementById('donut-content');
-  const monthLbl = document.getElementById('donut-month-label');
-  if (monthLbl) monthLbl.textContent = getMonthLabel();
-
-  if (total === 0) {
-    if (emptyEl)   emptyEl.style.display   = 'block';
-    if (contentEl) contentEl.style.display = 'none';
-    ctx.strokeStyle = '#e3e8f5';
-    ctx.lineWidth   = R_OUT - R_IN;
-    ctx.beginPath();
-    ctx.arc(CX, CY, (R_OUT + R_IN) / 2, 0, Math.PI * 2);
-    ctx.stroke();
-    return;
-  }
-
-  if (emptyEl)   emptyEl.style.display   = 'none';
-  if (contentEl) contentEl.style.display = 'block';
-
+  const CX = SIZE / 2, CY = SIZE / 2, R = 95;
   const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   let angle = -Math.PI / 2;
-  const GAP = 0.025; // gap between segments in radians
+  const GAP = 0.018;
 
+  // Draw pie slices
   entries.forEach(([cat, val]) => {
     const slice = (val / total) * Math.PI * 2;
     if (slice < 0.001) return;
     const color = CAT_COLORS[cat] || '#94a3b8';
-    const a1 = angle + GAP / 2;
-    const a2 = angle + slice - GAP / 2;
 
     ctx.beginPath();
-    ctx.arc(CX, CY, R_OUT, a1, a2);
-    ctx.arc(CX, CY, R_IN,  a2, a1, true);
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, R, angle + GAP, angle + slice - GAP);
     ctx.closePath();
     ctx.fillStyle = color;
     ctx.fill();
+
+    // White border between slices
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
     angle += slice;
   });
 
-  // Center total text
-  const totalEl = document.getElementById('donut-total');
-  if (totalEl) totalEl.textContent = fmt(total);
-
-  // Legend — 2 columns, show category + amount + %
-  legend.innerHTML = entries.slice(0, 8).map(([cat, val]) => {
+  // Legend — one row per category, full width with bar
+  legend.innerHTML = entries.map(([cat, val]) => {
     const pct   = Math.round((val / total) * 100);
     const color = CAT_COLORS[cat] || '#94a3b8';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface2);border-radius:8px;">
-      <div style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0;"></div>
-      <span style="font-size:11px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);">${cat}</span>
-      <span style="font-size:11px;font-weight:700;color:var(--text);margin-right:2px;">${fmt(val)}</span>
-      <span style="font-size:10px;font-weight:600;color:var(--muted);min-width:28px;text-align:right;">${pct}%</span>
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border-radius:10px;">
+      <div style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0;"></div>
+      <span style="font-size:12px;font-weight:600;flex:1;color:var(--text);">${cat}</span>
+      <span style="font-size:12px;font-weight:700;color:var(--text);">${fmt(val)}</span>
+      <span style="font-size:11px;font-weight:600;color:var(--muted);min-width:32px;text-align:right;">${pct}%</span>
     </div>`;
-  }).join('') +
-  (entries.length > 8
-    ? `<div style="font-size:11px;color:var(--muted);text-align:center;padding:4px;font-weight:600;">+${entries.length-8} more categories</div>`
-    : '');
+  }).join('');
 }
 
 function renderTrendChart() {
@@ -1946,6 +1988,7 @@ function txCard(t) {
       <div class="tx-meta">${t.category} · ${fmtDate(t.date)}</div>
     </div>
     <div class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+    <button class="tx-edit" onclick="openEditModal('${t.id}')" title="Edit">✎</button>
     <button class="tx-delete" onclick="deleteTx('${t.id}')">✕</button>
   </div>`;
 }
@@ -2115,6 +2158,42 @@ function addEntry() {
 function deleteTx(id) {
   state.transactions = state.transactions.filter(t => t.id !== id);
   save();
+  renderAll();
+}
+
+function openEditModal(id) {
+  const t = state.transactions.find(t => t.id === id);
+  if (!t) return;
+  document.getElementById('edit-tx-id').value   = id;
+  document.getElementById('edit-name').value     = t.name;
+  document.getElementById('edit-amount').value   = t.amount;
+  document.getElementById('edit-date').value     = t.date;
+  const sel = document.getElementById('edit-category');
+  [...sel.options].forEach(o => o.selected = o.value === t.category);
+  document.getElementById('editModal').classList.add('open');
+}
+
+function saveEdit() {
+  const id     = document.getElementById('edit-tx-id').value;
+  const name   = document.getElementById('edit-name').value.trim();
+  const amount = parseFloat(document.getElementById('edit-amount').value);
+  const category = document.getElementById('edit-category').value;
+  const date   = document.getElementById('edit-date').value;
+  if (!name || isNaN(amount) || amount <= 0 || !date) {
+    alert('Please fill all fields correctly.'); return;
+  }
+  const tx = state.transactions.find(t => t.id === id);
+  if (!tx) return;
+  tx.name = name;
+  tx.amount = amount;
+  tx.category = category;
+  tx.date = date;
+  // Auto-navigate to entry's month
+  const parts = date.split('-');
+  state.currentMonth = parseInt(parts[1], 10) - 1;
+  state.currentYear  = parseInt(parts[0], 10);
+  save();
+  closeModal('editModal');
   renderAll();
 }
 
