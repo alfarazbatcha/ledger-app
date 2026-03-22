@@ -1,0 +1,2409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Personal Finance Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #141716;
+    --surface2: #1c1f1d;
+    --surface3: #232723;
+    --border: #2a2f2b;
+    --accent: #b5e550;
+    --accent2: #7ec8a0;
+    --danger: #f47c7c;
+    --warning: #f0c070;
+    --text: #e8ede9;
+    --muted: #6b7a6d;
+    --income-color: #7ec8a0;
+    --expense-color: #f47c7c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(181,229,80,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(181,229,80,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 28px 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    padding: 0 24px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .nav { padding: 20px 12px; flex: 1; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--muted);
+    transition: all 0.2s;
+    margin-bottom: 2px;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(181,229,80,0.1); color: var(--accent); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .sidebar-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Main */
+  .main {
+    margin-left: 240px;
+    flex: 1;
+    padding: 36px 40px;
+    max-width: calc(100% - 240px);
+  }
+
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Page header */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Stat cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: var(--accent); }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.income::before { background: var(--income-color); }
+  .stat-card.expense::before { background: var(--expense-color); }
+  .stat-card.balance::before { background: var(--accent); }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+  }
+
+  .stat-value.income { color: var(--income-color); }
+  .stat-value.expense { color: var(--expense-color); }
+  .stat-value.balance { color: var(--accent); }
+
+  .stat-change {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0d0f0e;
+  }
+  .btn-primary:hover { background: #c9f060; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+  .btn-danger { background: rgba(244,124,124,0.15); color: var(--danger); border: 1px solid rgba(244,124,124,0.3); }
+  .btn-danger:hover { background: rgba(244,124,124,0.25); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+  }
+
+  .card-body { padding: 20px; }
+
+  /* Grid layout */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3-1 { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; }
+
+  /* Form */
+  .form-group { margin-bottom: 16px; }
+
+  .form-label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--muted); }
+  .form-select option { background: var(--surface2); }
+
+  .type-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .type-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .type-btn.active.income { background: rgba(126,200,160,0.15); color: var(--income-color); border-color: var(--income-color); }
+  .type-btn.active.expense { background: rgba(244,124,124,0.15); color: var(--expense-color); border-color: var(--expense-color); }
+
+  /* Transaction list */
+  .transaction-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+
+  .transaction-item:last-child { border-bottom: none; }
+  .transaction-item:hover { opacity: 0.85; }
+
+  .tx-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .tx-icon.income { background: rgba(126,200,160,0.15); }
+  .tx-icon.expense { background: rgba(244,124,124,0.12); }
+
+  .tx-info { flex: 1; }
+  .tx-name { font-size: 14px; font-weight: 500; }
+  .tx-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .tx-amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .tx-amount.income { color: var(--income-color); }
+  .tx-amount.expense { color: var(--expense-color); }
+
+  .tx-delete {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all 0.2s;
+  }
+
+  .transaction-item:hover .tx-delete { opacity: 1; }
+  .tx-delete:hover { color: var(--danger); background: rgba(244,124,124,0.1); }
+
+  /* Chart */
+  .chart-container { position: relative; height: 180px; margin-bottom: 8px; }
+
+  canvas { width: 100% !important; }
+
+  /* Budget bars */
+  .budget-item { margin-bottom: 18px; }
+
+  .budget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .budget-bar-bg {
+    height: 6px;
+    background: var(--surface3);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .budget-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  .budget-bar-fill.ok { background: var(--accent2); }
+  .budget-bar-fill.warning { background: var(--warning); }
+  .budget-bar-fill.over { background: var(--danger); }
+
+  /* AI Section */
+  .ai-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .ai-header {
+    padding: 16px 20px;
+    background: rgba(181,229,80,0.05);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(181,229,80,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(181,229,80,0.3);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .ai-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .ai-body { padding: 20px; }
+
+  .ai-response {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    min-height: 60px;
+  }
+
+  .ai-response .tip {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent);
+    font-size: 13px;
+  }
+
+  .ai-response .tip.warning { border-left-color: var(--warning); }
+  .ai-response .tip.danger { border-left-color: var(--danger); }
+
+  .ai-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .ai-input-row .form-input { flex: 1; }
+
+  .loading-dots span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 2px;
+    animation: bounce 1.2s infinite;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  /* Category pills */
+  .cat-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    background: var(--surface3);
+    color: var(--muted);
+    margin-right: 4px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+  }
+
+  .empty-state .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.5; }
+  .empty-state p { font-size: 13px; }
+
+  /* Month filter */
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+  }
+
+  .month-nav button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: color 0.2s;
+  }
+
+  .month-nav button:hover { color: var(--text); }
+
+  .month-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    min-width: 100px;
+    text-align: center;
+  }
+
+  /* Donut chart */
+  .donut-wrap { display: flex; align-items: center; gap: 20px; }
+  .donut-legend { flex: 1; }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-pct {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Quick Add */
+  .quick-add-section { margin-bottom: 24px; }
+  .quick-add-title {
+    font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px;
+  }
+  .quick-add-grid {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .quick-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; cursor: pointer; transition: all 0.18s;
+    color: var(--text); white-space: nowrap;
+  }
+  .quick-chip:hover { border-color: var(--accent); background: rgba(181,229,80,0.08); color: var(--accent); transform: translateY(-1px); }
+  .quick-chip.income-chip:hover { border-color: var(--income-color); background: rgba(126,200,160,0.08); color: var(--income-color); }
+  .quick-chip-add {
+    padding: 7px 12px; border-radius: 20px;
+    background: transparent; border: 1px dashed var(--border);
+    font-size: 12px; cursor: pointer; color: var(--muted);
+    transition: all 0.18s;
+  }
+  .quick-chip-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Import section tabs */
+  .import-tabs { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .import-tab {
+    flex: 1; padding: 9px; text-align: center; cursor: pointer;
+    font-size: 13px; color: var(--muted); background: transparent;
+    border: none; transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+  }
+  .import-tab.active { background: rgba(181,229,80,0.1); color: var(--accent); }
+  .import-tab-panel { display: none; }
+  .import-tab-panel.active { display: block; }
+
+  /* CSV area */
+  .csv-drop-zone {
+    border: 2px dashed var(--border); border-radius: 10px;
+    padding: 28px; text-align: center; cursor: pointer;
+    transition: all 0.2s; margin-bottom: 12px;
+  }
+  .csv-drop-zone:hover, .csv-drop-zone.drag-over { border-color: var(--accent); background: rgba(181,229,80,0.04); }
+  .csv-drop-zone .drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .csv-drop-zone p { font-size: 13px; color: var(--muted); }
+  .csv-drop-zone strong { color: var(--text); }
+
+  .csv-preview { max-height: 220px; overflow-y: auto; margin-top: 10px; }
+  .csv-preview-row {
+    display: grid; grid-template-columns: 1fr 80px 120px 80px 32px;
+    gap: 6px; align-items: center; padding: 6px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .csv-preview-row.header { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .csv-preview-row select { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 11px; padding: 2px 4px; }
+  .csv-preview-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  /* Receipt scanner */
+  .receipt-drop {
+    border: 2px dashed var(--border); border-radius: 10px;
+    padding: 32px; text-align: center; cursor: pointer;
+    transition: all 0.2s; position: relative;
+  }
+  .receipt-drop:hover { border-color: var(--accent2); background: rgba(126,200,160,0.04); }
+  .receipt-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .receipt-preview { max-width: 100%; max-height: 160px; border-radius: 8px; margin: 12px auto; display: block; }
+  .receipt-result { margin-top: 12px; }
+  .receipt-field { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .receipt-field label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; width: 80px; flex-shrink: 0; }
+
+  /* Recurring */
+  .recurring-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .recurring-item:last-child { border-bottom: none; }
+  .recur-icon { font-size: 18px; width: 32px; text-align: center; }
+  .recur-info { flex: 1; }
+  .recur-name { font-size: 14px; font-weight: 500; }
+  .recur-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .recur-amount { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; }
+  .badge-recur {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    background: rgba(181,229,80,0.12); color: var(--accent); border: 1px solid rgba(181,229,80,0.2);
+  }
+
+  /* Import page */
+  .import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* Reminder banner */
+  .reminder-banner {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(240,192,112,0.08);
+    border: 1px solid rgba(240,192,112,0.25);
+    border-radius: 10px; padding: 12px 16px;
+    margin-bottom: 20px; animation: fadeIn 0.4s ease;
+  }
+  .reminder-banner .remind-icon { font-size: 20px; flex-shrink: 0; }
+  .reminder-banner .remind-text { flex: 1; font-size: 13px; color: var(--warning); }
+  .reminder-banner .remind-text strong { display: block; font-size: 14px; margin-bottom: 1px; }
+  .reminder-banner .remind-close {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 16px; padding: 2px 6px; border-radius: 4px;
+  }
+  .reminder-banner .remind-close:hover { color: var(--text); }
+
+  /* Floating action button */
+  .fab {
+    position: fixed; bottom: 32px; right: 32px; z-index: 150;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #0d0f0e;
+    border: none; font-size: 24px; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(181,229,80,0.35);
+    transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+  }
+  .fab:hover { transform: scale(1.1) translateY(-2px); box-shadow: 0 6px 28px rgba(181,229,80,0.5); }
+  .fab:active { transform: scale(0.96); }
+
+  .fab-menu {
+    position: fixed; bottom: 100px; right: 32px; z-index: 150;
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    pointer-events: none; opacity: 0; transform: translateY(10px);
+    transition: all 0.2s;
+  }
+  .fab-menu.open { pointer-events: all; opacity: 1; transform: translateY(0); }
+  .fab-option {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px; padding: 9px 16px;
+    cursor: pointer; font-size: 13px; white-space: nowrap;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    transition: all 0.15s;
+  }
+  .fab-option:hover { border-color: var(--accent); color: var(--accent); transform: translateX(-4px); }
+  .fab-option .fab-opt-icon { font-size: 16px; }
+
+  /* Quick notes */
+  .note-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .note-item:last-child { border-bottom: none; }
+  .note-text { flex: 1; font-size: 13px; }
+  .note-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .note-actions { display: flex; gap: 6px; }
+  .note-btn {
+    padding: 3px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; border: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .note-btn.log { background: rgba(181,229,80,0.15); color: var(--accent); }
+  .note-btn.log:hover { background: rgba(181,229,80,0.25); }
+  .note-btn.del { background: rgba(244,124,124,0.1); color: var(--danger); }
+  .note-btn.del:hover { background: rgba(244,124,124,0.2); }
+
+  .streak-bar {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 20px;
+  }
+  .streak-day {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-family: 'DM Mono', monospace;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: all 0.2s;
+  }
+  .streak-day.logged { background: rgba(181,229,80,0.15); border-color: var(--accent); color: var(--accent); }
+  .streak-day.today { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 420px;
+    max-width: 95vw;
+    padding: 28px;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    margin-bottom: 20px;
+  }
+
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+
+  /* Savings goal */
+  .goal-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .goal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .goal-name { font-size: 14px; font-weight: 500; }
+  .goal-amount { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+  .goal-pct { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--accent); }
+
+  /* Tooltip */
+  .tag { 
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-family: 'DM Mono', monospace;
+    background: rgba(181,229,80,0.1); color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-text">Ledger</div>
+      <div class="logo-sub">Finance Manager</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showPage('dashboard', this)">
+        <span class="icon">◈</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('transactions', this)">
+        <span class="icon">⇄</span> Transactions
+      </div>
+      <div class="nav-item" onclick="showPage('budgets', this)">
+        <span class="icon">◎</span> Budgets
+      </div>
+      <div class="nav-item" onclick="showPage('goals', this)">
+        <span class="icon">◉</span> Goals
+      </div>
+      <div class="nav-item" onclick="showPage('insights', this)">
+        <span class="icon">✦</span> AI Insights
+      </div>
+      <div class="nav-item" onclick="showPage('import', this)">
+        <span class="icon">⇪</span> Import
+      </div>
+      <div class="nav-item" onclick="showPage('recurring', this)">
+        <span class="icon">↻</span> Recurring
+      </div>
+    </nav>
+    <div class="sidebar-footer" id="sidebar-month"></div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- Dashboard -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle" id="dash-date"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="month-nav">
+            <button onclick="changeMonth(-1)">‹</button>
+            <span class="month-label" id="month-label-main"></span>
+            <button onclick="changeMonth(1)">›</button>
+          </div>
+          <button class="btn btn-primary" onclick="openAddModal()">+ Add Entry</button>
+        </div>
+      </div>
+
+      <!-- Reminder banner (shown when nothing logged today) -->
+      <div id="reminder-banner" class="reminder-banner" style="display:none;">
+        <div class="remind-icon">🔔</div>
+        <div class="remind-text">
+          <strong>You haven't logged anything today</strong>
+          Tap a quick-add shortcut below or use the ＋ button to log now.
+        </div>
+        <button class="remind-close" onclick="dismissReminder()">✕</button>
+      </div>
+
+      <!-- 7-day logging streak -->
+      <div class="streak-bar" id="streak-bar"></div>
+
+      <!-- Quick Add shortcuts -->
+      <div class="quick-add-section">
+        <div class="quick-add-title">⚡ Quick Add</div>
+        <div class="quick-add-grid" id="quick-chips"></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card income">
+          <div class="stat-label">Total Income</div>
+          <div class="stat-value income" id="stat-income">$0.00</div>
+          <div class="stat-change" id="stat-income-count">0 entries</div>
+        </div>
+        <div class="stat-card expense">
+          <div class="stat-label">Total Expenses</div>
+          <div class="stat-value expense" id="stat-expense">$0.00</div>
+          <div class="stat-change" id="stat-expense-count">0 entries</div>
+        </div>
+        <div class="stat-card balance">
+          <div class="stat-label">Net Balance</div>
+          <div class="stat-value balance" id="stat-balance">$0.00</div>
+          <div class="stat-change" id="stat-savings-rate">Savings rate: 0%</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Expense Breakdown</span>
+          </div>
+          <div class="card-body">
+            <div class="donut-wrap">
+              <canvas id="donutChart" width="140" height="140" style="width:140px;height:140px;flex-shrink:0;"></canvas>
+              <div class="donut-legend" id="donutLegend">
+                <div class="empty-state" style="padding:10px;"><p>No expenses yet</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Recent Transactions</span>
+            <span class="tag" onclick="showPage('transactions', document.querySelector('.nav-item:nth-child(2)'));" style="cursor:pointer;">View all →</span>
+          </div>
+          <div class="card-body" id="recent-list" style="max-height:220px;overflow-y:auto;">
+            <div class="empty-state"><div class="empty-icon">📋</div><p>No transactions yet</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-section">
+        <div class="ai-header">
+          <div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:2px;">AI Financial Advisor</div>
+            <div style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">Powered by Claude</div>
+          </div>
+          <div class="ai-badge"><div class="ai-dot"></div> Live Analysis</div>
+        </div>
+        <div class="ai-body">
+          <div class="ai-response" id="dash-ai-response">
+            <div class="tip">💡 Add your income and expenses to get personalized AI-powered financial insights and tips to reduce unnecessary spending.</div>
+          </div>
+          <div class="ai-input-row">
+            <input class="form-input" id="dash-ai-input" placeholder="Ask anything about your finances…" onkeydown="if(event.key==='Enter') askAI('dash')">
+            <button class="btn btn-primary" onclick="askAI('dash')">Ask</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="page" id="page-transactions">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Transactions</div>
+          <div class="page-subtitle">All your income & expenses</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="month-nav">
+            <button onclick="changeMonth(-1)">‹</button>
+            <span class="month-label" id="month-label-tx"></span>
+            <button onclick="changeMonth(1)">›</button>
+          </div>
+          <button class="btn btn-primary" onclick="openAddModal()">+ Add Entry</button>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">💚 Income</span></div>
+          <div class="card-body" id="income-list" style="max-height:400px;overflow-y:auto;">
+            <div class="empty-state"><div class="empty-icon">📥</div><p>No income recorded</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">🔴 Expenses</span></div>
+          <div class="card-body" id="expense-list" style="max-height:400px;overflow-y:auto;">
+            <div class="empty-state"><div class="empty-icon">📤</div><p>No expenses recorded</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Budgets -->
+    <div class="page" id="page-budgets">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Budgets</div>
+          <div class="page-subtitle">Track spending against your limits</div>
+        </div>
+        <button class="btn btn-primary" onclick="openBudgetModal()">+ Set Budget</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Category Budgets</span></div>
+          <div class="card-body" id="budget-list">
+            <div class="empty-state"><div class="empty-icon">🎯</div><p>Set budgets per category to track your spending limits</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Budget Overview</span></div>
+          <div class="card-body" id="budget-overview">
+            <div class="empty-state"><p>Add budgets to see overview</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Goals -->
+    <div class="page" id="page-goals">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Savings Goals</div>
+          <div class="page-subtitle">Track your financial targets</div>
+        </div>
+        <button class="btn btn-primary" onclick="openGoalModal()">+ Add Goal</button>
+      </div>
+
+      <div id="goals-grid" class="grid-2">
+        <div class="card" style="grid-column:1/-1;">
+          <div class="card-body">
+            <div class="empty-state"><div class="empty-icon">🏆</div><p>No goals yet. Add a savings goal to track your progress!</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="page" id="page-insights">
+      <div class="page-header">
+        <div>
+          <div class="page-title">AI Insights</div>
+          <div class="page-subtitle">Claude-powered financial analysis</div>
+        </div>
+        <button class="btn btn-primary" onclick="generateFullInsights()">✦ Analyze Now</button>
+      </div>
+
+      <div class="ai-section" style="margin-bottom:20px;">
+        <div class="ai-header">
+          <div>
+            <div style="font-size:15px;font-weight:600;">Deep Financial Analysis</div>
+            <div style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">AI-powered spending intelligence</div>
+          </div>
+          <div class="ai-badge"><div class="ai-dot"></div> Claude AI</div>
+        </div>
+        <div class="ai-body">
+          <div class="ai-response" id="insights-response">
+            <div class="tip">✦ Click "Analyze Now" to get a comprehensive breakdown of your spending patterns and personalized tips to cut unnecessary expenses.</div>
+          </div>
+          <div class="ai-input-row">
+            <input class="form-input" id="insights-ai-input" placeholder="Ask for specific advice…" onkeydown="if(event.key==='Enter') askAI('insights')">
+            <button class="btn btn-primary" onclick="askAI('insights')">Ask</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Page -->
+    <div class="page" id="page-import">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Import Transactions</div>
+          <div class="page-subtitle">Bulk-load from bank CSV or scan a receipt</div>
+        </div>
+      </div>
+
+      <div class="import-grid">
+        <!-- CSV Import -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📄 Bank CSV Import</span>
+            <span class="tag">Bulk</span>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Export a statement from your bank (any CSV format) and paste it below or upload the file.</p>
+            <div class="import-tabs">
+              <button class="import-tab active" onclick="switchImportTab('file')">Upload File</button>
+              <button class="import-tab" onclick="switchImportTab('paste')">Paste CSV</button>
+            </div>
+
+            <div class="import-tab-panel active" id="itab-file">
+              <div class="csv-drop-zone" id="csvDropZone" onclick="document.getElementById('csvFileInput').click()">
+                <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none" onchange="handleCSVFile(this)">
+                <div class="drop-icon">📁</div>
+                <p><strong>Click to upload</strong> or drag & drop your CSV</p>
+                <p style="margin-top:4px;font-size:11px;">Supports most bank export formats</p>
+              </div>
+            </div>
+
+            <div class="import-tab-panel" id="itab-paste">
+              <textarea class="form-input" id="csvPasteArea" rows="5" placeholder="Paste CSV content here…&#10;Date,Description,Amount&#10;2025-03-01,Grocery Store,-45.20&#10;2025-03-02,Salary,3200.00" style="resize:vertical;font-family:'DM Mono',monospace;font-size:12px;"></textarea>
+              <button class="btn btn-primary" style="margin-top:8px;width:100%;" onclick="parseCSVPaste()">Parse CSV</button>
+            </div>
+
+            <div id="csv-preview-wrap" style="display:none;margin-top:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:13px;font-weight:500;" id="csv-preview-count"></span>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(true)">Select All</button>
+                  <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(false)">None</button>
+                  <button class="btn btn-primary" style="padding:6px 14px;font-size:12px;" onclick="importSelectedCSV()">Import Selected</button>
+                </div>
+              </div>
+              <div class="csv-preview" id="csv-preview"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipt Scanner -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📸 AI Receipt Scanner</span>
+            <div class="ai-badge" style="font-size:10px;padding:3px 8px;"><div class="ai-dot"></div> Claude Vision</div>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Upload a photo of any receipt — Claude will read it and extract all the details automatically.</p>
+            <div class="receipt-drop" id="receiptDrop">
+              <input type="file" id="receiptInput" accept="image/*" onchange="handleReceiptUpload(this)">
+              <div class="drop-icon" style="font-size:32px;margin-bottom:8px;">🧾</div>
+              <p style="font-size:13px;color:var(--muted);">Click to upload receipt photo</p>
+              <p style="font-size:11px;color:var(--muted);margin-top:4px;">JPG, PNG, HEIC supported</p>
+            </div>
+            <img id="receipt-preview-img" class="receipt-preview" style="display:none;">
+            <div id="receipt-scanning" style="display:none;text-align:center;padding:16px;">
+              <div class="loading-dots"><span></span><span></span><span></span></div>
+              <p style="font-size:12px;color:var(--muted);margin-top:8px;">Claude is reading your receipt…</p>
+            </div>
+            <div id="receipt-result" class="receipt-result" style="display:none;">
+              <div style="font-size:12px;color:var(--accent);font-family:'DM Mono',monospace;margin-bottom:10px;">✓ Receipt scanned — review & confirm</div>
+              <div class="receipt-field">
+                <label>Store</label>
+                <input class="form-input" id="r-name" style="flex:1;">
+              </div>
+              <div class="receipt-field">
+                <label>Amount</label>
+                <input class="form-input" id="r-amount" type="number" step="0.01" style="flex:1;">
+              </div>
+              <div class="receipt-field">
+                <label>Category</label>
+                <select class="form-select" id="r-category" style="flex:1;">
+                  <option>Food & Dining</option><option>Shopping</option><option>Transportation</option>
+                  <option>Healthcare</option><option>Entertainment</option><option>Utilities</option>
+                  <option>Personal Care</option><option>Other</option>
+                </select>
+              </div>
+              <div class="receipt-field">
+                <label>Date</label>
+                <input class="form-input" id="r-date" type="date" style="flex:1;">
+              </div>
+              <div id="receipt-items" style="font-size:12px;color:var(--muted);margin:8px 0;font-family:'DM Mono',monospace;max-height:80px;overflow-y:auto;"></div>
+              <button class="btn btn-primary" style="width:100%;margin-top:6px;" onclick="confirmReceiptEntry()">✓ Add to Expenses</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recurring Page -->
+    <div class="page" id="page-recurring">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Recurring Transactions</div>
+          <div class="page-subtitle">Set once, auto-logged every month</div>
+        </div>
+        <button class="btn btn-primary" onclick="openRecurringModal()">+ Add Recurring</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">↻ Active Recurring</span></div>
+          <div class="card-body" id="recurring-list">
+            <div class="empty-state"><div class="empty-icon">↻</div><p>No recurring transactions yet.<br>Add salary, rent, subscriptions…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">📋 This Month's Auto-Entries</span></div>
+          <div class="card-body" id="recurring-applied">
+            <div class="empty-state"><p>Recurring entries applied this month will appear here</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Floating Action Button -->
+<div class="fab-menu" id="fabMenu">
+  <div class="fab-option" onclick="closeFab(); openAddModal();">
+    <span class="fab-opt-icon">✏️</span> Full entry form
+  </div>
+  <div class="fab-option" onclick="closeFab(); openQuickNoteModal();">
+    <span class="fab-opt-icon">📝</span> Quick note (log later)
+  </div>
+  <div class="fab-option" onclick="closeFab(); showPage('import', document.querySelector('.nav-item:nth-child(6)')); document.getElementById('receiptInput').click();">
+    <span class="fab-opt-icon">📸</span> Scan receipt
+  </div>
+</div>
+<button class="fab" id="fabBtn" onclick="toggleFab()" title="Add expense">＋</button>
+<div class="modal-overlay" id="quickAmountModal">
+  <div class="modal" style="width:320px;">
+    <div class="modal-title" id="quick-modal-title">Quick Add</div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input class="form-input" id="quick-amount" type="number" min="0" step="0.01" placeholder="0.00" onkeydown="if(event.key==='Enter') confirmQuickAdd()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input class="form-input" id="quick-date" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmQuickAdd()" style="flex:1;">Add</button>
+      <button class="btn btn-ghost" onclick="closeModal('quickAmountModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Modal -->
+<div class="modal-overlay" id="recurringModal">
+
+<!-- Quick Note Modal -->
+<div class="modal-overlay" id="quickNoteModal">
+  <div class="modal" style="width:360px;">
+    <div class="modal-title">📝 Quick Note</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Jot down what you spent — you can confirm the details later.</p>
+    <div class="form-group">
+      <label class="form-label">What did you spend on?</label>
+      <input class="form-input" id="note-input" placeholder="e.g. Coffee at Tim's $4.50, taxi ride, groceries…" onkeydown="if(event.key==='Enter') saveQuickNote()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveQuickNote()" style="flex:1;">Save Note</button>
+      <button class="btn btn-ghost" onclick="closeModal('quickNoteModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notes Review Modal -->
+<div class="modal-overlay" id="notesReviewModal">
+  <div class="modal" style="width:480px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">📋 Pending Notes</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Review your quick notes and log them as real transactions.</p>
+    <div id="notes-review-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('notesReviewModal')" style="flex:1;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note → Entry Modal -->
+<div class="modal-overlay" id="noteToEntryModal">
+  <div class="modal" style="width:380px;">
+    <div class="modal-title">Log from Note</div>
+    <div id="note-source-text" style="font-size:13px;color:var(--muted);margin-bottom:14px;padding:10px;background:var(--surface2);border-radius:8px;font-style:italic;"></div>
+    <div class="type-toggle">
+      <button class="type-btn active expense" id="noteTypeIncome" onclick="setNoteType('income')">↑ Income</button>
+      <button class="type-btn active expense" id="noteTypeExpense" onclick="setNoteType('expense')">↓ Expense</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="note-entry-name" placeholder="What was it?">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input class="form-input" id="note-entry-amount" type="number" min="0" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="note-entry-category">
+        <option>Food & Dining</option><option>Transportation</option><option>Shopping</option>
+        <option>Entertainment</option><option>Healthcare</option><option>Subscriptions</option>
+        <option>Utilities</option><option>Personal Care</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input class="form-input" id="note-entry-date" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmNoteEntry()" style="flex:1;">Log It</button>
+      <button class="btn btn-ghost" onclick="closeModal('noteToEntryModal')">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Modal (reopened) -->
+  <div class="modal">
+    <div class="modal-title">Add Recurring Transaction</div>
+    <div class="type-toggle">
+      <button class="type-btn active income" id="recurTypeIncome" onclick="setRecurType('income')">↑ Income</button>
+      <button class="type-btn expense" id="recurTypeExpense" onclick="setRecurType('expense')">↓ Expense</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="recur-name" placeholder="e.g. Monthly Salary, Netflix…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input class="form-input" id="recur-amount" type="number" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="recur-category">
+        <option value="Salary">💰 Salary</option><option value="Freelance">💼 Freelance</option>
+        <option value="Housing">🏠 Housing</option><option value="Food & Dining">🍔 Food & Dining</option>
+        <option value="Subscriptions">📱 Subscriptions</option><option value="Utilities">💡 Utilities</option>
+        <option value="Transportation">🚗 Transportation</option><option value="Other">📝 Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Day of Month</label>
+      <input class="form-input" id="recur-day" type="number" min="1" max="28" placeholder="e.g. 1 for the 1st">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addRecurring()" style="flex:1;">Save Recurring</button>
+      <button class="btn btn-ghost" onclick="closeModal('recurringModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Entry Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-title">Add Entry</div>
+    <div class="type-toggle">
+      <button class="type-btn active income" id="typeIncome" onclick="setType('income')">↑ Income</button>
+      <button class="type-btn expense" id="typeExpense" onclick="setType('expense')">↓ Expense</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="entry-name" placeholder="e.g. Monthly salary, Coffee…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input class="form-input" id="entry-amount" type="number" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="entry-category">
+        <option value="Salary">💰 Salary</option>
+        <option value="Freelance">💼 Freelance</option>
+        <option value="Investment">📈 Investment</option>
+        <option value="Gift">🎁 Gift</option>
+        <option value="Other Income">📦 Other Income</option>
+        <option value="Housing">🏠 Housing</option>
+        <option value="Food & Dining">🍔 Food & Dining</option>
+        <option value="Transportation">🚗 Transportation</option>
+        <option value="Entertainment">🎬 Entertainment</option>
+        <option value="Shopping">🛍️ Shopping</option>
+        <option value="Healthcare">🏥 Healthcare</option>
+        <option value="Subscriptions">📱 Subscriptions</option>
+        <option value="Education">📚 Education</option>
+        <option value="Utilities">💡 Utilities</option>
+        <option value="Personal Care">✨ Personal Care</option>
+        <option value="Travel">✈️ Travel</option>
+        <option value="Other">📝 Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input class="form-input" id="entry-date" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addEntry()" style="flex:1;">Add Entry</button>
+      <button class="btn btn-ghost" onclick="closeModal('addModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Budget Modal -->
+<div class="modal-overlay" id="budgetModal">
+  <div class="modal">
+    <div class="modal-title">Set Budget</div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="budget-category">
+        <option value="Food & Dining">🍔 Food & Dining</option>
+        <option value="Transportation">🚗 Transportation</option>
+        <option value="Entertainment">🎬 Entertainment</option>
+        <option value="Shopping">🛍️ Shopping</option>
+        <option value="Healthcare">🏥 Healthcare</option>
+        <option value="Subscriptions">📱 Subscriptions</option>
+        <option value="Education">📚 Education</option>
+        <option value="Utilities">💡 Utilities</option>
+        <option value="Personal Care">✨ Personal Care</option>
+        <option value="Travel">✈️ Travel</option>
+        <option value="Housing">🏠 Housing</option>
+        <option value="Other">📝 Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monthly Limit ($)</label>
+      <input class="form-input" id="budget-amount" type="number" min="1" placeholder="e.g. 300">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addBudget()" style="flex:1;">Set Budget</button>
+      <button class="btn btn-ghost" onclick="closeModal('budgetModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Goal Modal -->
+<div class="modal-overlay" id="goalModal">
+  <div class="modal">
+    <div class="modal-title">Add Savings Goal</div>
+    <div class="form-group">
+      <label class="form-label">Goal Name</label>
+      <input class="form-input" id="goal-name" placeholder="e.g. Emergency Fund, Vacation…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Target Amount ($)</label>
+      <input class="form-input" id="goal-target" type="number" min="1" placeholder="e.g. 5000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Current Savings ($)</label>
+      <input class="form-input" id="goal-current" type="number" min="0" placeholder="e.g. 1200">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addGoal()" style="flex:1;">Add Goal</button>
+      <button class="btn btn-ghost" onclick="closeModal('goalModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let state = {
+  transactions: [],
+  budgets: {},
+  goals: [],
+  recurring: [],
+  quickShortcuts: [
+    { id:'q1', label:'☕ Coffee', category:'Food & Dining', type:'expense', amount: null },
+    { id:'q2', label:'🍔 Lunch', category:'Food & Dining', type:'expense', amount: null },
+    { id:'q3', label:'🚗 Gas', category:'Transportation', type:'expense', amount: null },
+    { id:'q4', label:'🛒 Groceries', category:'Food & Dining', type:'expense', amount: null },
+    { id:'q5', label:'💰 Salary', category:'Salary', type:'income', amount: null },
+  ],
+  currentMonth: new Date().getMonth(),
+  currentYear: new Date().getFullYear(),
+  entryType: 'income',
+  recurType: 'income',
+  pendingQuick: null,
+  csvRows: []
+};
+
+// Load from localStorage
+try {
+  const saved = localStorage.getItem('ledger_data');
+  if (saved) state = { ...state, ...JSON.parse(saved) };
+} catch(e) {}
+
+function save() {
+  try { localStorage.setItem('ledger_data', JSON.stringify(state)); } catch(e) {}
+}
+
+// ── Navigation ─────────────────────────────────────────────
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (el) el.classList.add('active');
+  renderAll();
+}
+
+// ── Month navigation ───────────────────────────────────────
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function changeMonth(dir) {
+  state.currentMonth += dir;
+  if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+  if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+  renderAll();
+}
+
+function getMonthLabel() { return MONTHS[state.currentMonth] + ' ' + state.currentYear; }
+
+function currentMonthTx() {
+  return state.transactions.filter(t => {
+    const d = new Date(t.date);
+    return d.getMonth() === state.currentMonth && d.getFullYear() === state.currentYear;
+  });
+}
+
+// ── Categories ─────────────────────────────────────────────
+const CAT_COLORS = {
+  'Food & Dining': '#f0c070','Transportation': '#7ec8a0','Entertainment': '#a78bfa',
+  'Shopping': '#f47c7c','Healthcare': '#60a5fa','Subscriptions': '#fb923c',
+  'Education': '#34d399','Utilities': '#94a3b8','Personal Care': '#f9a8d4',
+  'Travel': '#22d3ee','Housing': '#b5e550','Other': '#6b7a6d',
+  'Salary': '#7ec8a0','Freelance': '#b5e550','Investment': '#60a5fa',
+  'Gift': '#f9a8d4','Other Income': '#94a3b8'
+};
+
+const CAT_EMOJI = {
+  'Food & Dining':'🍔','Transportation':'🚗','Entertainment':'🎬','Shopping':'🛍️',
+  'Healthcare':'🏥','Subscriptions':'📱','Education':'📚','Utilities':'💡',
+  'Personal Care':'✨','Travel':'✈️','Housing':'🏠','Other':'📝',
+  'Salary':'💰','Freelance':'💼','Investment':'📈','Gift':'🎁','Other Income':'📦'
+};
+
+// ── Format ─────────────────────────────────────────────────
+function fmt(n) { return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtDate(d) { return new Date(d).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'2-digit'}); }
+
+// ── Render ─────────────────────────────────────────────────
+function renderAll() {
+  updateMonthLabels();
+  renderStats();
+  renderDonut();
+  renderRecent();
+  renderTransactionLists();
+  renderBudgets();
+  renderGoals();
+  renderQuickChips();
+  renderRecurring();
+  checkReminder();
+  renderStreak();
+  updateNotesBadge();
+}
+
+function updateMonthLabels() {
+  const lbl = getMonthLabel();
+  ['month-label-main','month-label-tx'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = lbl;
+  });
+  document.getElementById('sidebar-month').textContent = lbl;
+}
+
+function renderStats() {
+  const txs = currentMonthTx();
+  const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const balance = income - expense;
+  const rate = income > 0 ? Math.round((balance/income)*100) : 0;
+
+  document.getElementById('stat-income').textContent = fmt(income);
+  document.getElementById('stat-expense').textContent = fmt(expense);
+  document.getElementById('stat-balance').textContent = fmt(balance);
+  document.getElementById('stat-income-count').textContent = txs.filter(t=>t.type==='income').length + ' entries';
+  document.getElementById('stat-expense-count').textContent = txs.filter(t=>t.type==='expense').length + ' entries';
+  document.getElementById('stat-savings-rate').textContent = 'Savings rate: ' + rate + '%';
+
+  const balEl = document.getElementById('stat-balance');
+  balEl.style.color = balance >= 0 ? 'var(--accent)' : 'var(--danger)';
+}
+
+function renderDonut() {
+  const txs = currentMonthTx().filter(t=>t.type==='expense');
+  const canvas = document.getElementById('donutChart');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,140,140);
+
+  // Group by category
+  const cats = {};
+  txs.forEach(t => cats[t.category] = (cats[t.category] || 0) + t.amount);
+  const total = Object.values(cats).reduce((s,v)=>s+v, 0);
+
+  const legend = document.getElementById('donutLegend');
+
+  if (total === 0) {
+    ctx.strokeStyle = 'var(--border)'; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.arc(70,70,50,0,Math.PI*2); ctx.stroke();
+    legend.innerHTML = '<div class="empty-state" style="padding:10px;"><p>No expenses</p></div>';
+    return;
+  }
+
+  let angle = -Math.PI / 2;
+  const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  entries.forEach(([cat, val]) => {
+    const slice = (val / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(70,70);
+    ctx.arc(70,70,54,angle,angle+slice);
+    ctx.fillStyle = CAT_COLORS[cat] || '#6b7a6d';
+    ctx.fill();
+    angle += slice;
+  });
+
+  // Donut hole
+  ctx.beginPath();
+  ctx.arc(70,70,34,0,Math.PI*2);
+  ctx.fillStyle = '#1c1f1d';
+  ctx.fill();
+
+  // Legend
+  legend.innerHTML = entries.slice(0,5).map(([cat,val]) =>
+    `<div class="legend-item">
+      <div class="legend-dot" style="background:${CAT_COLORS[cat]||'#6b7a6d'}"></div>
+      <span style="font-size:12px;">${CAT_EMOJI[cat]||'📝'} ${cat}</span>
+      <span class="legend-pct">${Math.round((val/total)*100)}%</span>
+    </div>`
+  ).join('') + (entries.length > 5 ? `<div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:4px;">+${entries.length-5} more</div>` : '');
+}
+
+function renderRecent() {
+  const txs = currentMonthTx().slice(-5).reverse();
+  const el = document.getElementById('recent-list');
+  if (!txs.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No transactions this month</p></div>';
+    return;
+  }
+  el.innerHTML = txs.map(t => txCard(t)).join('');
+}
+
+function txCard(t) {
+  return `<div class="transaction-item">
+    <div class="tx-icon ${t.type}">${CAT_EMOJI[t.category]||'📝'}</div>
+    <div class="tx-info">
+      <div class="tx-name">${t.name}</div>
+      <div class="tx-meta">${t.category} · ${fmtDate(t.date)}</div>
+    </div>
+    <div class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+    <button class="tx-delete" onclick="deleteTx('${t.id}')">✕</button>
+  </div>`;
+}
+
+function renderTransactionLists() {
+  const txs = currentMonthTx();
+  const income = txs.filter(t=>t.type==='income').reverse();
+  const expense = txs.filter(t=>t.type==='expense').reverse();
+
+  const il = document.getElementById('income-list');
+  if (income.length) il.innerHTML = income.map(t=>txCard(t)).join('');
+  else il.innerHTML = '<div class="empty-state"><div class="empty-icon">📥</div><p>No income this month</p></div>';
+
+  const el = document.getElementById('expense-list');
+  if (expense.length) el.innerHTML = expense.map(t=>txCard(t)).join('');
+  else el.innerHTML = '<div class="empty-state"><div class="empty-icon">📤</div><p>No expenses this month</p></div>';
+}
+
+function renderBudgets() {
+  const txs = currentMonthTx().filter(t=>t.type==='expense');
+  const spent = {};
+  txs.forEach(t => spent[t.category] = (spent[t.category]||0) + t.amount);
+
+  const el = document.getElementById('budget-list');
+  const ov = document.getElementById('budget-overview');
+  const budgets = state.budgets;
+
+  if (!Object.keys(budgets).length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><p>Set budgets per category</p></div>';
+    ov.innerHTML = '<div class="empty-state"><p>Add budgets to see overview</p></div>';
+    return;
+  }
+
+  let overBudget = 0, onTrack = 0;
+
+  el.innerHTML = Object.entries(budgets).map(([cat, limit]) => {
+    const s = spent[cat] || 0;
+    const pct = Math.min((s/limit)*100, 100);
+    const cls = pct >= 100 ? 'over' : pct >= 75 ? 'warning' : 'ok';
+    if (pct >= 100) overBudget++; else onTrack++;
+    return `<div class="budget-item">
+      <div class="budget-header">
+        <span>${CAT_EMOJI[cat]||'📝'} ${cat}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);">${fmt(s)} / ${fmt(limit)}</span>
+          <button class="btn btn-danger" style="padding:3px 8px;font-size:11px;" onclick="deleteBudget('${cat}')">×</button>
+        </div>
+      </div>
+      <div class="budget-bar-bg">
+        <div class="budget-bar-fill ${cls}" style="width:${pct}%"></div>
+      </div>
+      ${s > limit ? `<div style="font-size:11px;color:var(--danger);margin-top:4px;font-family:'DM Mono',monospace;">⚠ Over by ${fmt(s-limit)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  ov.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="background:rgba(126,200,160,0.1);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:24px;color:var(--income-color);">${onTrack}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;">On Track</div>
+      </div>
+      <div style="background:rgba(244,124,124,0.1);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:24px;color:var(--expense-color);">${overBudget}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;">Over Budget</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">
+      Total budgeted: ${fmt(Object.values(budgets).reduce((s,v)=>s+v,0))}<br>
+      Total spent: ${fmt(Object.values(spent).reduce((s,v)=>s+v,0))}
+    </div>`;
+}
+
+function renderGoals() {
+  const el = document.getElementById('goals-grid');
+  if (!state.goals.length) {
+    el.innerHTML = '<div class="card" style="grid-column:1/-1;"><div class="card-body"><div class="empty-state"><div class="empty-icon">🏆</div><p>No goals yet. Add a savings goal!</p></div></div></div>';
+    return;
+  }
+  el.innerHTML = state.goals.map(g => {
+    const pct = Math.min((g.current/g.target)*100, 100);
+    return `<div class="card">
+      <div class="card-body">
+        <div class="goal-card">
+          <div class="goal-header">
+            <div>
+              <div class="goal-name">🏆 ${g.name}</div>
+              <div class="goal-amount">${fmt(g.current)} of ${fmt(g.target)}</div>
+            </div>
+            <div class="goal-pct">${Math.round(pct)}%</div>
+          </div>
+          <div class="budget-bar-bg" style="height:8px;">
+            <div class="budget-bar-fill ok" style="width:${pct}%;background:var(--accent);"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;">
+            <span>Remaining: ${fmt(g.target-g.current)}</span>
+            <button class="btn btn-danger" style="padding:2px 8px;font-size:11px;" onclick="deleteGoal('${g.id}')">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Entry ──────────────────────────────────────────────────
+function setType(type) {
+  state.entryType = type;
+  document.getElementById('typeIncome').className = 'type-btn' + (type==='income'?' active income':'');
+  document.getElementById('typeExpense').className = 'type-btn' + (type==='expense'?' active expense':'');
+
+  // Filter category options
+  const sel = document.getElementById('entry-category');
+  const incomeCategories = ['Salary','Freelance','Investment','Gift','Other Income'];
+  const expCategories = ['Housing','Food & Dining','Transportation','Entertainment','Shopping','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Other'];
+  const cats = type === 'income' ? incomeCategories : expCategories;
+  const emojis = { 'Salary':'💰','Freelance':'💼','Investment':'📈','Gift':'🎁','Other Income':'📦',
+    'Housing':'🏠','Food & Dining':'🍔','Transportation':'🚗','Entertainment':'🎬','Shopping':'🛍️',
+    'Healthcare':'🏥','Subscriptions':'📱','Education':'📚','Utilities':'💡','Personal Care':'✨','Travel':'✈️','Other':'📝' };
+  sel.innerHTML = cats.map(c => `<option value="${c}">${emojis[c]} ${c}</option>`).join('');
+}
+
+function openAddModal() {
+  document.getElementById('entry-name').value = '';
+  document.getElementById('entry-amount').value = '';
+  document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
+  setType('income');
+  document.getElementById('addModal').classList.add('open');
+}
+
+function addEntry() {
+  const name = document.getElementById('entry-name').value.trim();
+  const amount = parseFloat(document.getElementById('entry-amount').value);
+  const category = document.getElementById('entry-category').value;
+  const date = document.getElementById('entry-date').value;
+
+  if (!name || isNaN(amount) || amount <= 0 || !date) {
+    alert('Please fill all fields with valid values.');
+    return;
+  }
+
+  state.transactions.push({ id: Date.now().toString(), type: state.entryType, name, amount, category, date });
+  save();
+  closeModal('addModal');
+  renderAll();
+}
+
+function deleteTx(id) {
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  save();
+  renderAll();
+}
+
+// ── Budget ─────────────────────────────────────────────────
+function openBudgetModal() { document.getElementById('budgetModal').classList.add('open'); }
+
+function addBudget() {
+  const cat = document.getElementById('budget-category').value;
+  const amount = parseFloat(document.getElementById('budget-amount').value);
+  if (!amount || amount <= 0) { alert('Please enter a valid budget amount.'); return; }
+  state.budgets[cat] = amount;
+  save();
+  closeModal('budgetModal');
+  renderBudgets();
+}
+
+function deleteBudget(cat) {
+  delete state.budgets[cat];
+  save();
+  renderBudgets();
+}
+
+// ── Goals ──────────────────────────────────────────────────
+function openGoalModal() { document.getElementById('goalModal').classList.add('open'); }
+
+function addGoal() {
+  const name = document.getElementById('goal-name').value.trim();
+  const target = parseFloat(document.getElementById('goal-target').value);
+  const current = parseFloat(document.getElementById('goal-current').value) || 0;
+  if (!name || !target || target <= 0) { alert('Please fill in goal name and target.'); return; }
+  state.goals.push({ id: Date.now().toString(), name, target, current });
+  save();
+  closeModal('goalModal');
+  renderGoals();
+}
+
+function deleteGoal(id) {
+  state.goals = state.goals.filter(g => g.id !== id);
+  save();
+  renderGoals();
+}
+
+// ── Modal ──────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── AI ─────────────────────────────────────────────────────
+function buildFinanceContext() {
+  const txs = currentMonthTx();
+  const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const cats = {};
+  txs.filter(t=>t.type==='expense').forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
+  const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  return `User's financial data for ${getMonthLabel()}:
+- Total income: $${income.toFixed(2)}
+- Total expenses: $${expense.toFixed(2)}
+- Net balance: $${(income-expense).toFixed(2)}
+- Savings rate: ${income > 0 ? Math.round(((income-expense)/income)*100) : 0}%
+- Top expense categories: ${topCats.map(([c,v])=>`${c} ($${v.toFixed(2)})`).join(', ')}
+- Total transactions: ${txs.length}
+- Budgets set: ${Object.entries(state.budgets).map(([c,v])=>`${c}: $${v}`).join(', ')||'None'}
+- Goals: ${state.goals.map(g=>`${g.name}: $${g.current}/$${g.target}`).join(', ')||'None'}
+All transactions: ${JSON.stringify(txs.map(t=>({type:t.type,name:t.name,amount:t.amount,category:t.category})))}`;
+}
+
+async function askAI(context) {
+  const inputId = context === 'dash' ? 'dash-ai-input' : 'insights-ai-input';
+  const responseId = context === 'dash' ? 'dash-ai-response' : 'insights-response';
+  const question = document.getElementById(inputId).value.trim();
+  if (!question) return;
+
+  const responseEl = document.getElementById(responseId);
+  responseEl.innerHTML = '<div class="loading-dots" style="padding:10px;"><span></span><span></span><span></span></div>';
+  document.getElementById(inputId).value = '';
+
+  const finCtx = buildFinanceContext();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `You are a personal finance advisor embedded in a finance tracking app. 
+You help users understand their spending and reduce unnecessary expenses.
+Be concise, practical, and supportive. Format responses with short paragraphs or bullet points.
+When you identify unnecessary expenses or ways to save, be specific and actionable.
+Use dollar amounts when relevant. Keep responses under 250 words.`,
+        messages: [{ role: 'user', content: `${finCtx}\n\nUser question: ${question}` }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b=>b.text||'').join('') || 'Unable to get response.';
+    responseEl.innerHTML = formatAIResponse(text);
+  } catch(e) {
+    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your connection.</div>';
+  }
+}
+
+async function generateFullInsights() {
+  const responseEl = document.getElementById('insights-response');
+  responseEl.innerHTML = '<div class="loading-dots" style="padding:10px;"><span></span><span></span><span></span></div>';
+
+  const finCtx = buildFinanceContext();
+  const txs = currentMonthTx();
+
+  if (!txs.length) {
+    responseEl.innerHTML = '<div class="tip">📊 Add some transactions first to get personalized insights!</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `You are a sharp personal finance advisor. Analyze the user's financial data and provide:
+1. A quick financial health summary (1-2 sentences)
+2. Top 2-3 unnecessary or reducible expenses with specific suggestions
+3. One actionable savings tip for this month
+Be specific, use their actual numbers, and be encouraging but honest. Keep it under 300 words. Do not use markdown headers.`,
+        messages: [{ role: 'user', content: `Please analyze my finances and help me reduce unnecessary expenses:\n${finCtx}` }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b=>b.text||'').join('') || 'Unable to get response.';
+    responseEl.innerHTML = formatAIResponse(text);
+  } catch(e) {
+    responseEl.innerHTML = '<div class="tip danger">⚠ Could not connect to AI. Please check your connection.</div>';
+  }
+}
+
+function formatAIResponse(text) {
+  // Convert bullet points to styled tips
+  const lines = text.split('\n').filter(l => l.trim());
+  return lines.map(line => {
+    if (line.startsWith('- ') || line.startsWith('• ')) {
+      const content = line.replace(/^[-•]\s*/, '');
+      const isWarning = content.toLowerCase().includes('reduce') || content.toLowerCase().includes('cut') || content.toLowerCase().includes('unnecessary');
+      return `<div class="tip ${isWarning?'warning':''}">💡 ${content}</div>`;
+    }
+    return `<p style="margin-bottom:10px;">${line}</p>`;
+  }).join('');
+}
+
+// ── FAB ────────────────────────────────────────────────────
+let _fabOpen = false;
+function toggleFab() {
+  _fabOpen = !_fabOpen;
+  document.getElementById('fabMenu').classList.toggle('open', _fabOpen);
+  document.getElementById('fabBtn').textContent = _fabOpen ? '✕' : '＋';
+  document.getElementById('fabBtn').style.background = _fabOpen ? 'var(--muted)' : 'var(--accent)';
+}
+function closeFab() {
+  _fabOpen = false;
+  document.getElementById('fabMenu').classList.remove('open');
+  document.getElementById('fabBtn').textContent = '＋';
+  document.getElementById('fabBtn').style.background = 'var(--accent)';
+}
+document.addEventListener('click', e => {
+  if (_fabOpen && !e.target.closest('.fab') && !e.target.closest('.fab-menu')) closeFab();
+});
+
+// ── Reminder & Streak ──────────────────────────────────────
+function checkReminder() {
+  const today = new Date().toISOString().split('T')[0];
+  const loggedToday = state.transactions.some(t => t.date === today);
+  const dismissed = sessionStorage.getItem('reminder_dismissed') === today;
+  const banner = document.getElementById('reminder-banner');
+  if (banner) banner.style.display = (!loggedToday && !dismissed) ? 'flex' : 'none';
+}
+
+function dismissReminder() {
+  const today = new Date().toISOString().split('T')[0];
+  sessionStorage.setItem('reminder_dismissed', today);
+  document.getElementById('reminder-banner').style.display = 'none';
+}
+
+function renderStreak() {
+  const el = document.getElementById('streak-bar');
+  if (!el) return;
+  const today = new Date();
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().split('T')[0];
+    const logged = state.transactions.some(t => t.date === iso);
+    const isToday = i === 0;
+    const label = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+    days.push(`<div class="streak-day ${logged?'logged':''} ${isToday?'today':''}" title="${iso}">${label}</div>`);
+  }
+  const streak = calcStreak();
+  el.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-right:4px;">7-day log:</span>` + days.join('') +
+    `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);margin-left:8px;">🔥 ${streak}-day streak</span>`;
+}
+
+function calcStreak() {
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().split('T')[0];
+    if (state.transactions.some(t => t.date === iso)) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// ── Quick Notes ────────────────────────────────────────────
+function openQuickNoteModal() {
+  document.getElementById('note-input').value = '';
+  document.getElementById('quickNoteModal').classList.add('open');
+  setTimeout(() => document.getElementById('note-input').focus(), 100);
+}
+
+function saveQuickNote() {
+  const text = document.getElementById('note-input').value.trim();
+  if (!text) return;
+  if (!state.quickNotes) state.quickNotes = [];
+  state.quickNotes.push({ id: Date.now().toString(), text, date: new Date().toISOString() });
+  save();
+  closeModal('quickNoteModal');
+  updateNotesBadge();
+  // Show a brief confirmation
+  const fab = document.getElementById('fabBtn');
+  fab.textContent = '✓';
+  fab.style.background = 'var(--income-color)';
+  setTimeout(() => { fab.textContent = '＋'; fab.style.background = 'var(--accent)'; }, 1500);
+}
+
+function updateNotesBadge() {
+  const count = (state.quickNotes||[]).length;
+  // Show notes badge in sidebar if there are pending notes
+  const existing = document.getElementById('notes-nav-badge');
+  if (count > 0) {
+    if (!existing) {
+      // Add "Review Notes" nav item
+      const nav = document.querySelector('.nav');
+      const noteNav = document.createElement('div');
+      noteNav.className = 'nav-item';
+      noteNav.id = 'notes-nav-item';
+      noteNav.style.color = 'var(--warning)';
+      noteNav.innerHTML = `<span class="icon">📝</span> Notes <span id="notes-nav-badge" style="background:var(--warning);color:#0d0f0e;border-radius:10px;padding:1px 6px;font-size:10px;font-family:'DM Mono',monospace;margin-left:auto;">${count}</span>`;
+      noteNav.onclick = openNotesReview;
+      nav.appendChild(noteNav);
+    } else {
+      existing.textContent = count;
+    }
+  } else {
+    const navItem = document.getElementById('notes-nav-item');
+    if (navItem) navItem.remove();
+  }
+}
+
+function openNotesReview() {
+  const notes = state.quickNotes || [];
+  const list = document.getElementById('notes-review-list');
+  if (!notes.length) {
+    list.innerHTML = '<div class="empty-state"><p>No pending notes 🎉</p></div>';
+  } else {
+    list.innerHTML = notes.map(n => {
+      const d = new Date(n.date);
+      const timeStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="note-item">
+        <div style="font-size:20px;">📝</div>
+        <div class="note-text">
+          <div>${n.text}</div>
+          <div class="note-meta">${timeStr}</div>
+        </div>
+        <div class="note-actions">
+          <button class="note-btn log" onclick="openNoteToEntry('${n.id}')">Log it</button>
+          <button class="note-btn del" onclick="deleteNote('${n.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('notesReviewModal').classList.add('open');
+}
+
+let _activeNoteId = null;
+function openNoteToEntry(id) {
+  const note = (state.quickNotes||[]).find(n=>n.id===id);
+  if (!note) return;
+  _activeNoteId = id;
+  document.getElementById('note-source-text').textContent = '"' + note.text + '"';
+  // Try to parse amount from note text
+  const amtMatch = note.text.match(/\$?([\d]+\.?[\d]*)/);
+  if (amtMatch) document.getElementById('note-entry-amount').value = amtMatch[1];
+  else document.getElementById('note-entry-amount').value = '';
+  // Try to parse name
+  const nameGuess = note.text.replace(/\$[\d]+\.?[\d]*/g,'').trim().replace(/^\s*at\s*/i,'').trim() || note.text;
+  document.getElementById('note-entry-name').value = nameGuess.slice(0,40);
+  document.getElementById('note-entry-date').value = new Date(note.date).toISOString().split('T')[0];
+  setNoteType('expense');
+  closeModal('notesReviewModal');
+  document.getElementById('noteToEntryModal').classList.add('open');
+}
+
+function setNoteType(type) {
+  document.getElementById('noteTypeIncome').className = 'type-btn' + (type==='income'?' active income':'');
+  document.getElementById('noteTypeExpense').className = 'type-btn' + (type==='expense'?' active expense':'');
+  document.getElementById('noteTypeIncome').setAttribute('data-type', type);
+  document.getElementById('noteTypeExpense').setAttribute('data-type', type);
+  // Store selected type
+  document.getElementById('noteToEntryModal').setAttribute('data-type', type);
+}
+
+function confirmNoteEntry() {
+  const name = document.getElementById('note-entry-name').value.trim();
+  const amount = parseFloat(document.getElementById('note-entry-amount').value);
+  const category = document.getElementById('note-entry-category').value;
+  const date = document.getElementById('note-entry-date').value;
+  const type = document.getElementById('noteToEntryModal').getAttribute('data-type') || 'expense';
+  if (!name || isNaN(amount) || amount <= 0) { alert('Please fill in name and amount.'); return; }
+  state.transactions.push({ id: Date.now().toString(), type, name, amount, category, date });
+  // Remove the note
+  state.quickNotes = (state.quickNotes||[]).filter(n=>n.id!==_activeNoteId);
+  save();
+  closeModal('noteToEntryModal');
+  updateNotesBadge();
+  renderAll();
+}
+
+function deleteNote(id) {
+  state.quickNotes = (state.quickNotes||[]).filter(n=>n.id!==id);
+  save();
+  updateNotesBadge();
+  openNotesReview();
+}
+
+// ── Quick Add ──────────────────────────────────────────────
+function renderQuickChips() {
+  const el = document.getElementById('quick-chips');
+  if (!el) return;
+  el.innerHTML = state.quickShortcuts.map(s =>
+    `<button class="quick-chip ${s.type==='income'?'income-chip':''}" onclick="openQuickAdd('${s.id}')">
+      ${s.label}${s.amount ? ' · $'+s.amount : ''}
+    </button>`
+  ).join('') +
+  `<button class="quick-chip-add" onclick="openCustomQuickAdd()">+ Custom</button>`;
+}
+
+let _pendingQuickId = null;
+
+function openQuickAdd(id) {
+  const s = state.quickShortcuts.find(q=>q.id===id);
+  if (!s) return;
+  _pendingQuickId = id;
+  document.getElementById('quick-modal-title').textContent = s.label;
+  document.getElementById('quick-amount').value = s.amount || '';
+  document.getElementById('quick-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('quickAmountModal').classList.add('open');
+  setTimeout(() => document.getElementById('quick-amount').focus(), 100);
+}
+
+function openCustomQuickAdd() {
+  const label = prompt('Shortcut name (e.g. 🍕 Pizza):');
+  if (!label) return;
+  const cat = prompt('Category (e.g. Food & Dining, Transportation, Shopping):') || 'Other';
+  const typeRaw = prompt('Type: income or expense?') || 'expense';
+  const type = typeRaw.toLowerCase().includes('income') ? 'income' : 'expense';
+  const id = 'q' + Date.now();
+  state.quickShortcuts.push({ id, label, category: cat, type, amount: null });
+  save();
+  renderQuickChips();
+}
+
+function confirmQuickAdd() {
+  const s = state.quickShortcuts.find(q=>q.id===_pendingQuickId);
+  if (!s) return;
+  const amount = parseFloat(document.getElementById('quick-amount').value);
+  const date = document.getElementById('quick-date').value;
+  if (!amount || amount <= 0 || !date) { alert('Enter a valid amount.'); return; }
+  state.transactions.push({ id: Date.now().toString(), type: s.type, name: s.label.replace(/^[\p{Emoji}\s]+/u,'').trim() || s.label, amount, category: s.category, date });
+  save();
+  closeModal('quickAmountModal');
+  renderAll();
+}
+
+// ── Recurring ──────────────────────────────────────────────
+function setRecurType(type) {
+  state.recurType = type;
+  document.getElementById('recurTypeIncome').className = 'type-btn' + (type==='income'?' active income':'');
+  document.getElementById('recurTypeExpense').className = 'type-btn' + (type==='expense'?' active expense':'');
+}
+
+function openRecurringModal() {
+  document.getElementById('recur-name').value = '';
+  document.getElementById('recur-amount').value = '';
+  document.getElementById('recur-day').value = '1';
+  setRecurType('expense');
+  document.getElementById('recurringModal').classList.add('open');
+}
+
+function addRecurring() {
+  const name = document.getElementById('recur-name').value.trim();
+  const amount = parseFloat(document.getElementById('recur-amount').value);
+  const category = document.getElementById('recur-category').value;
+  const day = parseInt(document.getElementById('recur-day').value);
+  if (!name || !amount || amount <= 0 || !day || day < 1 || day > 28) {
+    alert('Please fill all fields correctly (day must be 1–28).');
+    return;
+  }
+  state.recurring.push({ id: Date.now().toString(), type: state.recurType, name, amount, category, day });
+  save();
+  closeModal('recurringModal');
+  applyRecurring();
+  renderRecurring();
+}
+
+function deleteRecurring(id) {
+  state.recurring = state.recurring.filter(r=>r.id!==id);
+  save();
+  renderRecurring();
+}
+
+function applyRecurring() {
+  // Auto-add recurring entries for current month if not already added
+  const key = `${state.currentYear}-${state.currentMonth}`;
+  state.recurring.forEach(r => {
+    const txDate = `${state.currentYear}-${String(state.currentMonth+1).padStart(2,'0')}-${String(r.day).padStart(2,'0')}`;
+    const alreadyExists = state.transactions.some(t =>
+      t.recurringId === r.id && t.date.startsWith(`${state.currentYear}-${String(state.currentMonth+1).padStart(2,'0')}`)
+    );
+    if (!alreadyExists) {
+      state.transactions.push({ id: Date.now().toString() + Math.random(), recurringId: r.id, type: r.type, name: r.name, amount: r.amount, category: r.category, date: txDate, auto: true });
+    }
+  });
+  save();
+}
+
+function renderRecurring() {
+  const el = document.getElementById('recurring-list');
+  const applied = document.getElementById('recurring-applied');
+  if (!el || !applied) return;
+  if (!state.recurring.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">↻</div><p>No recurring transactions yet.<br>Add salary, rent, subscriptions…</p></div>';
+    applied.innerHTML = '<div class="empty-state"><p>No recurring entries this month</p></div>';
+    return;
+  }
+  el.innerHTML = state.recurring.map(r =>
+    `<div class="recurring-item">
+      <div class="recur-icon">${CAT_EMOJI[r.category]||'📝'}</div>
+      <div class="recur-info">
+        <div class="recur-name">${r.name} <span class="badge-recur">every ${r.day}${r.day===1?'st':r.day===2?'nd':r.day===3?'rd':'th'}</span></div>
+        <div class="recur-meta">${r.category} · ${r.type}</div>
+      </div>
+      <div class="recur-amount ${r.type}">${r.type==='income'?'+':'-'}${fmt(r.amount)}</div>
+      <button class="tx-delete" style="opacity:1;" onclick="deleteRecurring('${r.id}')">✕</button>
+    </div>`
+  ).join('');
+
+  const autoTxs = currentMonthTx().filter(t=>t.auto);
+  if (autoTxs.length) {
+    applied.innerHTML = autoTxs.map(t => txCard(t)).join('');
+  } else {
+    applied.innerHTML = '<div class="empty-state"><p>No auto-entries yet this month</p></div>';
+  }
+}
+
+// ── CSV Import ─────────────────────────────────────────────
+function switchImportTab(tab) {
+  document.querySelectorAll('.import-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='file')||(i===1&&tab==='paste')));
+  document.getElementById('itab-file').classList.toggle('active', tab==='file');
+  document.getElementById('itab-paste').classList.toggle('active', tab==='paste');
+}
+
+function handleCSVFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSVText(e.target.result);
+  reader.readAsText(file);
+}
+
+function parseCSVPaste() {
+  parseCSVText(document.getElementById('csvPasteArea').value);
+}
+
+function parseCSVText(text) {
+  const lines = text.trim().split('\n').filter(l=>l.trim());
+  if (lines.length < 2) { alert('CSV appears empty or invalid.'); return; }
+
+  // Try to detect columns
+  const header = lines[0].toLowerCase().split(',').map(h=>h.trim().replace(/"/g,''));
+  const dateIdx = header.findIndex(h=>h.includes('date'));
+  const descIdx = header.findIndex(h=>h.includes('desc')||h.includes('name')||h.includes('memo')||h.includes('narr')||h.includes('detail'));
+  const amtIdx = header.findIndex(h=>h.includes('amount')||h.includes('amt')||h.includes('debit')||h.includes('credit'));
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+    if (cols.length < 2) continue;
+    const rawAmt = cols[amtIdx >= 0 ? amtIdx : cols.length-1] || '0';
+    const amt = parseFloat(rawAmt.replace(/[$,\s]/g,''));
+    if (isNaN(amt) || amt === 0) continue;
+    rows.push({
+      date: cols[dateIdx >= 0 ? dateIdx : 0] || new Date().toISOString().split('T')[0],
+      name: cols[descIdx >= 0 ? descIdx : 1] || 'Transaction',
+      amount: Math.abs(amt),
+      type: amt < 0 ? 'expense' : 'income',
+      category: amt < 0 ? 'Other' : 'Other Income',
+      selected: true
+    });
+  }
+
+  if (!rows.length) { alert('Could not parse any transactions. Check the CSV format.'); return; }
+  state.csvRows = rows;
+  renderCSVPreview();
+}
+
+const EXP_CATS = ['Food & Dining','Transportation','Shopping','Entertainment','Healthcare','Subscriptions','Education','Utilities','Personal Care','Travel','Housing','Other'];
+const INC_CATS = ['Salary','Freelance','Investment','Gift','Other Income'];
+
+function renderCSVPreview() {
+  const wrap = document.getElementById('csv-preview-wrap');
+  const preview = document.getElementById('csv-preview');
+  const count = document.getElementById('csv-preview-count');
+  wrap.style.display = 'block';
+  count.textContent = `${state.csvRows.length} transactions found`;
+
+  const catOptions = (type) => [...(type==='expense'?EXP_CATS:INC_CATS)].map(c=>`<option value="${c}">${c}</option>`).join('');
+
+  preview.innerHTML = `<div class="csv-preview-row header"><span>Description</span><span>Amount</span><span>Category</span><span>Type</span><span>✓</span></div>` +
+    state.csvRows.map((r,i) =>
+      `<div class="csv-preview-row">
+        <span style="font-size:12px;" title="${r.name}">${r.name.slice(0,28)}${r.name.length>28?'…':''}</span>
+        <span style="font-family:'DM Mono',monospace;color:${r.type==='income'?'var(--income-color)':'var(--expense-color)'};">${r.type==='income'?'+':'-'}$${r.amount.toFixed(2)}</span>
+        <select onchange="state.csvRows[${i}].category=this.value">${catOptions(r.type)}</select>
+        <span class="cat-pill" style="background:${r.type==='income'?'rgba(126,200,160,0.15)':'rgba(244,124,124,0.12)'};">${r.type}</span>
+        <input type="checkbox" ${r.selected?'checked':''} onchange="state.csvRows[${i}].selected=this.checked">
+      </div>`
+    ).join('');
+}
+
+function selectAllCSV(val) {
+  state.csvRows.forEach(r=>r.selected=val);
+  renderCSVPreview();
+}
+
+function importSelectedCSV() {
+  const selected = state.csvRows.filter(r=>r.selected);
+  if (!selected.length) { alert('No rows selected.'); return; }
+  selected.forEach(r => {
+    state.transactions.push({ id: Date.now().toString()+Math.random(), type: r.type, name: r.name, amount: r.amount, category: r.category, date: normalizeDate(r.date) });
+  });
+  save();
+  document.getElementById('csv-preview-wrap').style.display = 'none';
+  state.csvRows = [];
+  alert(`✓ Imported ${selected.length} transactions!`);
+  renderAll();
+}
+
+function normalizeDate(str) {
+  // Try to parse various date formats into YYYY-MM-DD
+  const d = new Date(str);
+  if (!isNaN(d)) return d.toISOString().split('T')[0];
+  // Try DD/MM/YYYY
+  const parts = str.split(/[\/\-\.]/);
+  if (parts.length === 3) {
+    if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+// ── Receipt Scanner ────────────────────────────────────────
+function handleReceiptUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(',')[1];
+    const mediaType = file.type || 'image/jpeg';
+    const imgEl = document.getElementById('receipt-preview-img');
+    imgEl.src = e.target.result;
+    imgEl.style.display = 'block';
+    document.getElementById('receipt-result').style.display = 'none';
+    document.getElementById('receipt-scanning').style.display = 'block';
+    document.getElementById('receiptDrop').style.display = 'none';
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: 'You are a receipt parser. Extract details from receipt images and respond ONLY with valid JSON, no markdown. JSON fields: store (string), total (number), date (YYYY-MM-DD string or null), category (one of: Food & Dining, Shopping, Transportation, Healthcare, Entertainment, Utilities, Personal Care, Other), items (array of strings, max 5).',
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: 'Extract receipt details as JSON.' }
+          ]}]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.map(b=>b.text||'').join('').trim();
+      const clean = text.replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(clean);
+
+      document.getElementById('r-name').value = parsed.store || 'Receipt';
+      document.getElementById('r-amount').value = parsed.total || '';
+      const catSel = document.getElementById('r-category');
+      [...catSel.options].forEach(o => { if (o.value === parsed.category) o.selected = true; });
+      document.getElementById('r-date').value = parsed.date || new Date().toISOString().split('T')[0];
+      if (parsed.items?.length) {
+        document.getElementById('receipt-items').textContent = '📋 ' + parsed.items.join(' · ');
+      }
+      document.getElementById('receipt-scanning').style.display = 'none';
+      document.getElementById('receipt-result').style.display = 'block';
+    } catch(err) {
+      document.getElementById('receipt-scanning').style.display = 'none';
+      document.getElementById('receiptDrop').style.display = 'block';
+      alert('Could not scan receipt. Please add manually.');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function confirmReceiptEntry() {
+  const name = document.getElementById('r-name').value.trim() || 'Receipt';
+  const amount = parseFloat(document.getElementById('r-amount').value);
+  const category = document.getElementById('r-category').value;
+  const date = document.getElementById('r-date').value;
+  if (!amount || amount <= 0) { alert('Please enter a valid amount.'); return; }
+  state.transactions.push({ id: Date.now().toString(), type: 'expense', name, amount, category, date: date || new Date().toISOString().split('T')[0] });
+  save();
+  // Reset
+  document.getElementById('receipt-result').style.display = 'none';
+  document.getElementById('receipt-preview-img').style.display = 'none';
+  document.getElementById('receiptDrop').style.display = 'block';
+  document.getElementById('receiptInput').value = '';
+  renderAll();
+  alert('✓ Receipt expense added!');
+}
+
+// ── Init ───────────────────────────────────────────────────
+document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+applyRecurring();
+renderAll();
+</script>
+</body>
+</html>
