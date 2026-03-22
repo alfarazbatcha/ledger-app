@@ -2097,7 +2097,7 @@ All transactions: ${JSON.stringify(txs.map(t=>({type:t.type,name:t.name,amount:t
 // Direct API calls are blocked by browsers (CORS).
 // Set your Cloudflare Worker proxy URL below after setup.
 // Instructions: see bottom of this file.
-const AI_PROXY_URL = 'https://ledger-ai.alfarazbatcha.workers.dev'; 
+const AI_PROXY_URL = 'https://ledger-ai.alfarazbatcha.workers.dev';
 
 async function callAI(system, userMsg) {
   if (!AI_PROXY_URL) {
@@ -2107,7 +2107,7 @@ async function callAI(system, userMsg) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system,
       messages: [{ role: 'user', content: userMsg }]
@@ -2645,7 +2645,7 @@ function handleReceiptUpload(input) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 500,
           system: 'You are a receipt parser. Extract details from receipt images and respond ONLY with valid JSON, no markdown. JSON fields: store (string), total (number), date (YYYY-MM-DD string or null), category (one of: Food & Dining, Shopping, Transportation, Healthcare, Entertainment, Utilities, Personal Care, Other), items (array of strings, max 5).',
           messages: [{ role: 'user', content: [
