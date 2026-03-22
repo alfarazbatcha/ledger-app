@@ -555,13 +555,18 @@
 
   .csv-preview { max-height: 220px; overflow-y: auto; margin-top: 10px; }
   .csv-preview-row {
-    display: grid; grid-template-columns: 1fr 80px 120px 80px 32px;
+    display: grid; grid-template-columns: 90px 1fr 70px 110px 32px;
     gap: 6px; align-items: center; padding: 6px 0;
     border-bottom: 1px solid var(--border); font-size: 12px;
   }
   .csv-preview-row.header { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .csv-preview-row select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; padding: 2px 4px; }
   .csv-preview-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  @media (max-width: 768px) {
+    .csv-preview-row { grid-template-columns: 75px 1fr 65px 28px; }
+    .csv-preview-row .csv-cat-col { display: none; }
+  }
 
   /* Receipt scanner */
   .receipt-drop {
@@ -1267,13 +1272,13 @@
             </div>
 
             <div id="csv-preview-wrap" style="display:none;margin-top:14px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-size:13px;font-weight:500;" id="csv-preview-count"></span>
-                <div style="display:flex;gap:8px;">
-                  <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(true)">Select All</button>
-                  <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="selectAllCSV(false)">None</button>
-                  <button class="btn btn-primary" style="padding:6px 14px;font-size:12px;" onclick="importSelectedCSV()">Import Selected</button>
-                  <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="clearCSVPreview()">✕ Cancel</button>
+              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+                <span style="font-size:13px;font-weight:600;" id="csv-preview-count"></span>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="selectAllCSV(true)">✓ All</button>
+                  <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="selectAllCSV(false)">✗ None</button>
+                  <button class="btn btn-primary" style="padding:6px 12px;font-size:12px;" onclick="importSelectedCSV()">↑ Import</button>
+                  <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" onclick="clearCSVPreview()">✕ Cancel</button>
                 </div>
               </div>
               <div class="csv-preview" id="csv-preview"></div>
@@ -2611,16 +2616,25 @@ function renderCSVPreview() {
 
   const catOptions = (type) => [...(type==='expense'?EXP_CATS:INC_CATS)].map(c=>`<option value="${c}">${c}</option>`).join('');
 
-  preview.innerHTML = `<div class="csv-preview-row header"><span>Description</span><span>Amount</span><span>Category</span><span>Type</span><span>✓</span></div>` +
-    state.csvRows.map((r,i) =>
-      `<div class="csv-preview-row">
-        <span style="font-size:12px;" title="${r.name}">${r.name.slice(0,28)}${r.name.length>28?'…':''}</span>
-        <span style="font-family:'DM Mono',monospace;color:${r.type==='income'?'var(--income-color)':'var(--expense-color)'};">${r.type==='income'?'+':'-'}$${r.amount.toFixed(2)}</span>
-        <select onchange="state.csvRows[${i}].category=this.value">${catOptions(r.type)}</select>
-        <span class="cat-pill" style="background:${r.type==='income'?'rgba(126,200,160,0.15)':'rgba(244,124,124,0.12)'};">${r.type}</span>
+  preview.innerHTML = `<div class="csv-preview-row header">
+    <span>Date</span>
+    <span>Description</span>
+    <span>Amount</span>
+    <span class="csv-cat-col">Category</span>
+    <span>✓</span>
+  </div>` +
+    state.csvRows.map((r,i) => {
+      // Format date nicely
+      const parts = r.date.split('-');
+      const dispDate = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0].slice(2)}` : r.date;
+      return `<div class="csv-preview-row">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">${dispDate}</span>
+        <span style="font-size:12px;font-weight:500;" title="${r.name}">${r.name.slice(0,26)}${r.name.length>26?'…':''}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:${r.type==='income'?'var(--income-color)':'var(--expense-color)'};">${r.type==='income'?'+':'-'}$${r.amount.toFixed(2)}</span>
+        <select class="csv-cat-col" onchange="state.csvRows[${i}].category=this.value">${catOptions(r.type)}</select>
         <input type="checkbox" ${r.selected?'checked':''} onchange="state.csvRows[${i}].selected=this.checked">
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
 }
 
 function clearCSVPreview() {
