@@ -938,6 +938,9 @@
       <button class="bottom-nav-item" id="bnav-insights" onclick="showPage('insights', this); updateBottomNav('insights')">
         <span class="bnav-icon">✦</span>AI
       </button>
+      <button class="bottom-nav-item" id="bnav-reports" onclick="showPage('reports', this); updateBottomNav('reports'); renderReport();">
+        <span class="bnav-icon">📄</span>Report
+      </button>
       <button class="bottom-nav-item" onclick="showMobileProfile()" id="bnav-profile">
         <span class="bnav-icon">👤</span>Account
       </button>
@@ -996,6 +999,12 @@
       </div>
       <div class="nav-item" onclick="showPage('recurring', this)">
         <span class="icon">↻</span> Recurring
+      </div>
+      <div class="nav-item" onclick="showPage('reports', this)">
+        <span class="icon">📄</span> Reports
+      </div>
+      <div class="nav-item" onclick="showPage('reports', this)">
+        <span class="icon">📄</span> Reports
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -1138,9 +1147,9 @@
       <div class="page-header">
         <div>
           <div class="page-title">Transactions</div>
-          <div class="page-subtitle">All your income & expenses</div>
+          <div class="page-subtitle" id="tx-filter-label">All income & expenses</div>
         </div>
-        <div style="display:flex;gap:10px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <div class="month-nav">
             <button onclick="changeMonth(-1)">‹</button>
             <span class="month-label" id="month-label-tx"></span>
@@ -1150,18 +1159,43 @@
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom:20px;">
-        <div class="card">
-          <div class="card-header"><span class="card-title">💚 Income</span></div>
-          <div class="card-body" id="income-list" style="max-height:400px;overflow-y:auto;">
-            <div class="empty-state"><div class="empty-icon">📥</div><p>No income recorded</p></div>
-          </div>
+      <!-- Filter Bar -->
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <input class="form-input" id="tx-search" placeholder="🔍 Search transactions…" oninput="renderTransactionLists()" style="flex:1;min-width:180px;">
+        <select class="form-select" id="tx-cat-filter" onchange="renderTransactionLists()" style="min-width:160px;">
+          <option value="">All Categories</option>
+          <option value="Housing">🏠 Housing</option>
+          <option value="Food & Dining">🍔 Food & Dining</option>
+          <option value="Transportation">🚗 Transportation</option>
+          <option value="Entertainment">🎬 Entertainment</option>
+          <option value="Shopping">🛍️ Shopping</option>
+          <option value="Healthcare">🏥 Healthcare</option>
+          <option value="Subscriptions">📱 Subscriptions</option>
+          <option value="Education">📚 Education</option>
+          <option value="Utilities">💡 Utilities</option>
+          <option value="Personal Care">✨ Personal Care</option>
+          <option value="Travel">✈️ Travel</option>
+          <option value="Charity">🤲 Charity</option>
+          <option value="Salary">💰 Salary</option>
+          <option value="Freelance">💼 Freelance</option>
+          <option value="Investment">📈 Investment</option>
+          <option value="Other">📝 Other</option>
+        </select>
+        <select class="form-select" id="tx-type-filter" onchange="renderTransactionLists()" style="min-width:130px;">
+          <option value="">All Types</option>
+          <option value="expense">Expenses only</option>
+          <option value="income">Income only</option>
+        </select>
+        <button class="btn btn-ghost" onclick="clearTxFilters()" style="white-space:nowrap;">✕ Clear</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="tx-list-title">All Transactions</span>
+          <span id="tx-count" style="font-size:12px;color:var(--muted);font-weight:600;"></span>
         </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title">🔴 Expenses</span></div>
-          <div class="card-body" id="expense-list" style="max-height:400px;overflow-y:auto;">
-            <div class="empty-state"><div class="empty-icon">📤</div><p>No expenses recorded</p></div>
-          </div>
+        <div class="card-body" id="tx-unified-list" style="max-height:600px;overflow-y:auto;">
+          <div class="empty-state"><div class="empty-icon">📋</div><p>No transactions yet</p></div>
         </div>
       </div>
     </div>
@@ -1365,6 +1399,25 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Reports Page -->
+    <div class="page" id="page-reports">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Monthly Report</div>
+          <div class="page-subtitle">Generate and print a full month summary</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="month-nav">
+            <button onclick="changeMonth(-1);renderReport()">‹</button>
+            <span class="month-label" id="month-label-report"></span>
+            <button onclick="changeMonth(1);renderReport()">›</button>
+          </div>
+          <button class="btn btn-primary" onclick="printReport()">🖨 Print / Save PDF</button>
+        </div>
+      </div>
+      <div id="report-content"></div>
     </div>
 
   </main>
@@ -1693,6 +1746,7 @@ function showPage(id, el) {
   if (el && el.classList.contains('nav-item')) el.classList.add('active');
   updateBottomNav(id);
   renderAll();
+  if (id === 'reports') renderReport();
 }
 
 function updateBottomNav(id) {
@@ -1886,15 +1940,16 @@ function renderDonut() {
     angle += slice;
   });
 
-  // Legend — one row per category, full width with bar
+  // Legend — one row per category, full width, clickable
   legend.innerHTML = entries.map(([cat, val]) => {
     const pct   = Math.round((val / total) * 100);
     const color = CAT_COLORS[cat] || '#94a3b8';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border-radius:10px;">
+    return `<div onclick="filterTxByCategory('${cat}')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background='var(--accent-light)';this.style.transform='translateX(3px)'" onmouseout="this.style.background='var(--surface2)';this.style.transform='translateX(0)'">
       <div style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0;"></div>
       <span style="font-size:12px;font-weight:600;flex:1;color:var(--text);">${cat}</span>
       <span style="font-size:12px;font-weight:700;color:var(--text);">${fmt(val)}</span>
       <span style="font-size:11px;font-weight:600;color:var(--muted);min-width:32px;text-align:right;">${pct}%</span>
+      <span style="font-size:11px;color:var(--muted);">→</span>
     </div>`;
   }).join('');
 }
@@ -2005,17 +2060,74 @@ function txCard(t) {
 }
 
 function renderTransactionLists() {
-  const txs = currentMonthTx();
-  const income = txs.filter(t=>t.type==='income').reverse();
-  const expense = txs.filter(t=>t.type==='expense').reverse();
+  let txs = currentMonthTx().slice().reverse();
 
-  const il = document.getElementById('income-list');
-  if (income.length) il.innerHTML = income.map(t=>txCard(t)).join('');
-  else il.innerHTML = '<div class="empty-state"><div class="empty-icon">📥</div><p>No income this month</p></div>';
+  // Apply search filter
+  const search = (document.getElementById('tx-search')?.value || '').toLowerCase().trim();
+  if (search) txs = txs.filter(t => t.name.toLowerCase().includes(search) || t.category.toLowerCase().includes(search));
 
-  const el = document.getElementById('expense-list');
-  if (expense.length) el.innerHTML = expense.map(t=>txCard(t)).join('');
-  else el.innerHTML = '<div class="empty-state"><div class="empty-icon">📤</div><p>No expenses this month</p></div>';
+  // Apply category filter
+  const cat = document.getElementById('tx-cat-filter')?.value || '';
+  if (cat) txs = txs.filter(t => t.category === cat);
+
+  // Apply type filter
+  const type = document.getElementById('tx-type-filter')?.value || '';
+  if (type) txs = txs.filter(t => t.type === type);
+
+  // Update label
+  const labelEl = document.getElementById('tx-filter-label');
+  const titleEl = document.getElementById('tx-list-title');
+  const countEl = document.getElementById('tx-count');
+  const activeFilter = cat || search || type;
+
+  if (labelEl) labelEl.textContent = cat ? `Filtered by: ${cat}` : search ? `Searching: "${search}"` : 'All income & expenses';
+  if (titleEl) titleEl.textContent = cat ? `${CAT_EMOJI[cat]||'📝'} ${cat} Transactions` : 'All Transactions';
+  if (countEl) countEl.textContent = `${txs.length} transaction${txs.length!==1?'s':''}`;
+
+  const el = document.getElementById('tx-unified-list');
+  if (!el) return;
+
+  if (!txs.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">${activeFilter?'🔍':'📋'}</div><p>${activeFilter?'No transactions match your filter':'No transactions this month'}</p></div>`;
+    return;
+  }
+
+  // Group by date
+  const byDate = {};
+  txs.forEach(t => { if (!byDate[t.date]) byDate[t.date] = []; byDate[t.date].push(t); });
+
+  el.innerHTML = Object.entries(byDate)
+    .sort((a,b) => b[0].localeCompare(a[0]))
+    .map(([date, dateTxs]) => {
+      const dayTotal = dateTxs.reduce((s,t) => t.type==='expense' ? s-t.amount : s+t.amount, 0);
+      return `<div style="margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px 4px;border-bottom:1px solid var(--border);margin-bottom:4px;">
+          <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">${fmtDate(date)}</span>
+          <span style="font-size:11px;font-weight:700;color:${dayTotal>=0?'var(--income-color)':'var(--expense-color)'};">${dayTotal>=0?'+':''}${fmt(dayTotal)}</span>
+        </div>
+        ${dateTxs.map(t=>txCard(t)).join('')}
+      </div>`;
+    }).join('');
+}
+
+function clearTxFilters() {
+  const s = document.getElementById('tx-search');
+  const c = document.getElementById('tx-cat-filter');
+  const t = document.getElementById('tx-type-filter');
+  if (s) s.value = '';
+  if (c) c.value = '';
+  if (t) t.value = '';
+  renderTransactionLists();
+}
+
+function filterTxByCategory(cat) {
+  // Navigate to transactions page and filter by category
+  showPage('transactions', document.querySelector('.nav-item:nth-child(2)'));
+  updateBottomNav('transactions');
+  const sel = document.getElementById('tx-cat-filter');
+  if (sel) { sel.value = cat; renderTransactionLists(); }
+  // Scroll to top of transactions
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function renderBudgets() {
@@ -3039,6 +3151,164 @@ function confirmReceiptEntry() {
   document.getElementById('receiptInput').value = '';
   renderAll();
   alert('✓ Receipt expense added!');
+}
+
+// ── Reports ────────────────────────────────────────────────
+function renderReport() {
+  const el = document.getElementById('report-content');
+  const lbl = document.getElementById('month-label-report');
+  if (lbl) lbl.textContent = getMonthLabel();
+  if (!el) return;
+
+  const txs = currentMonthTx();
+  const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const balance = income - expense;
+  const savingsRate = income > 0 ? Math.round((balance/income)*100) : 0;
+
+  // Category breakdown
+  const cats = {};
+  txs.filter(t=>t.type==='expense').forEach(t => cats[t.category]=(cats[t.category]||0)+t.amount);
+  const catEntries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+
+  // Income breakdown
+  const incomeCats = {};
+  txs.filter(t=>t.type==='income').forEach(t => incomeCats[t.category]=(incomeCats[t.category]||0)+t.amount);
+
+  if (!txs.length) {
+    el.innerHTML = `<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon">📄</div><p>No transactions found for ${getMonthLabel()}</p></div></div></div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <!-- Summary -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title">📊 Summary — ${getMonthLabel()}</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+          <div style="background:var(--income-light);border:1px solid #a7f3d0;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:11px;font-weight:700;color:var(--income-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Total Income</div>
+            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:var(--income-color);">${fmt(income)}</div>
+          </div>
+          <div style="background:var(--expense-light);border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:11px;font-weight:700;color:var(--expense-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Total Expenses</div>
+            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:var(--expense-color);">${fmt(expense)}</div>
+          </div>
+          <div style="background:var(--accent-light);border:1px solid #c4b5fd;border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Net Balance</div>
+            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:${balance>=0?'var(--accent)':'var(--danger)'};">${fmt(balance)}</div>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;font-weight:600;color:var(--muted);">Savings Rate</span>
+          <span style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:${savingsRate>=20?'var(--income-color)':savingsRate>=10?'var(--warning)':'var(--expense-color)'};">${savingsRate}%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expense Breakdown -->
+    ${catEntries.length ? `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title">💸 Expenses by Category</span></div>
+      <div class="card-body">
+        ${catEntries.map(([cat,val]) => {
+          const pct = Math.round((val/expense)*100);
+          const color = CAT_COLORS[cat]||'#94a3b8';
+          return `<div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <span style="font-size:13px;font-weight:600;">${CAT_EMOJI[cat]||'📝'} ${cat}</span>
+              <div style="display:flex;gap:12px;align-items:center;">
+                <span style="font-size:13px;font-weight:700;">${fmt(val)}</span>
+                <span style="font-size:12px;color:var(--muted);font-weight:600;min-width:32px;text-align:right;">${pct}%</span>
+              </div>
+            </div>
+            <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width 0.5s ease;"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Income Sources -->
+    ${Object.keys(incomeCats).length ? `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title">💰 Income Sources</span></div>
+      <div class="card-body">
+        ${Object.entries(incomeCats).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:18px;">${CAT_EMOJI[cat]||'💰'}</span>
+            <span style="font-size:13px;font-weight:600;flex:1;">${cat}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--income-color);">+${fmt(val)}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- All Transactions -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 All Transactions (${txs.length})</span>
+      </div>
+      <div class="card-body" style="max-height:500px;overflow-y:auto;">
+        ${txs.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t => `
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--muted);min-width:60px;">${fmtDate(t.date)}</div>
+            <div style="font-size:18px;">${CAT_EMOJI[t.category]||'📝'}</div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;">${t.name}</div>
+              <div style="font-size:11px;color:var(--muted);">${t.category}</div>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:${t.type==='income'?'var(--income-color)':'var(--expense-color)'};">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function printReport() {
+  const content = document.getElementById('report-content')?.innerHTML;
+  if (!content) { alert('No report to print. Please navigate to a month with transactions.'); return; }
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html><html><head>
+    <title>Ledger Report — ${getMonthLabel()}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { font-family:'Plus Jakarta Sans',sans-serif; color:#1e2140; background:white; padding:32px; max-width:800px; margin:0 auto; }
+      h1 { font-family:'Outfit',sans-serif; font-size:26px; font-weight:700; margin-bottom:4px; }
+      .sub { font-size:13px; color:#8b93b8; margin-bottom:24px; }
+      .card { background:white; border:1px solid #e3e8f5; border-radius:12px; overflow:hidden; margin-bottom:16px; }
+      .card-header { padding:12px 16px; background:#f7f9ff; border-bottom:1px solid #e3e8f5; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#8b93b8; }
+      .card-body { padding:16px; }
+      .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+      .summary-box { border-radius:10px; padding:14px; text-align:center; }
+      .summary-box .label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+      .summary-box .value { font-family:'Outfit',sans-serif; font-size:22px; font-weight:700; }
+      .income-box { background:#ecfdf5; border:1px solid #a7f3d0; }
+      .income-box .label, .income-box .value { color:#10b981; }
+      .expense-box { background:#fef2f2; border:1px solid #fecaca; }
+      .expense-box .label, .expense-box .value { color:#ef4444; }
+      .balance-box { background:#eef0fe; border:1px solid #c4b5fd; }
+      .balance-box .label { color:#6366f1; }
+      .tx-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f0f4ff; font-size:12px; }
+      .tx-date { color:#8b93b8; min-width:60px; font-weight:600; }
+      .tx-name { flex:1; font-weight:600; }
+      .tx-cat { color:#8b93b8; font-size:11px; }
+      .tx-amt-income { color:#10b981; font-weight:700; }
+      .tx-amt-expense { color:#ef4444; font-weight:700; }
+      .cat-bar-bg { height:5px; background:#e3e8f5; border-radius:3px; overflow:hidden; margin-top:5px; }
+      .cat-bar-fill { height:100%; border-radius:3px; }
+      .cat-row { margin-bottom:10px; }
+      .cat-row-header { display:flex; justify-content:space-between; font-size:12px; font-weight:600; }
+      @media print { body { padding:16px; } }
+    </style>
+    </head><body>
+    <h1>Ledger — Monthly Report</h1>
+    <div class="sub">${getMonthLabel()} · Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+    ${content}
+    <script>window.onload=()=>window.print();<\/script>
+    </body></html>`);
+  win.document.close();
 }
 
 // ── Firebase ───────────────────────────────────────────────
