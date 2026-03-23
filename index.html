@@ -3152,159 +3152,415 @@ function confirmReceiptEntry() {
 
 // ── Reports ────────────────────────────────────────────────
 function renderReport() {
-  const el = document.getElementById('report-content');
   const lbl = document.getElementById('month-label-report');
   if (lbl) lbl.textContent = getMonthLabel();
+  const el = document.getElementById('report-content');
   if (!el) return;
 
   const txs = currentMonthTx();
-  const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const balance = income - expense;
-  const savingsRate = income > 0 ? Math.round((balance/income)*100) : 0;
-
-  // Category breakdown
-  const cats = {};
-  txs.filter(t=>t.type==='expense').forEach(t => cats[t.category]=(cats[t.category]||0)+t.amount);
-  const catEntries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-
-  // Income breakdown
-  const incomeCats = {};
-  txs.filter(t=>t.type==='income').forEach(t => incomeCats[t.category]=(incomeCats[t.category]||0)+t.amount);
-
   if (!txs.length) {
-    el.innerHTML = `<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon">📄</div><p>No transactions found for ${getMonthLabel()}</p></div></div></div>`;
+    el.innerHTML = `<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon">📄</div><p>No transactions for ${getMonthLabel()}</p></div></div></div>`;
     return;
   }
 
+  const income  = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const balance = income - expense;
+  const savingsRate = income > 0 ? Math.round((balance/income)*100) : 0;
+  const expTxs  = txs.filter(t=>t.type==='expense');
+  const incTxs  = txs.filter(t=>t.type==='income');
+
+  // Category totals
+  const cats = {};
+  expTxs.forEach(t => cats[t.category]=(cats[t.category]||0)+t.amount);
+  const catEntries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+
+  const incomeCats = {};
+  incTxs.forEach(t => incomeCats[t.category]=(incomeCats[t.category]||0)+t.amount);
+
+  // Biggest expense
+  const biggest = expTxs.reduce((a,b)=>b.amount>a.amount?b:a, expTxs[0]);
+  // Most frequent category
+  const catCount = {};
+  expTxs.forEach(t=>catCount[t.category]=(catCount[t.category]||0)+1);
+  const topCat = Object.entries(catCount).sort((a,b)=>b[1]-a[1])[0];
+  // Daily average spend
+  const daysInMonth = new Date(state.currentYear, state.currentMonth+1, 0).getDate();
+  const dailyAvg = expense / daysInMonth;
+
   el.innerHTML = `
-    <!-- Summary -->
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title">📊 Summary — ${getMonthLabel()}</span></div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
-          <div style="background:var(--income-light);border:1px solid #a7f3d0;border-radius:12px;padding:14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:var(--income-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Total Income</div>
-            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:var(--income-color);">${fmt(income)}</div>
-          </div>
-          <div style="background:var(--expense-light);border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:var(--expense-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Total Expenses</div>
-            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:var(--expense-color);">${fmt(expense)}</div>
-          </div>
-          <div style="background:var(--accent-light);border:1px solid #c4b5fd;border-radius:12px;padding:14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Net Balance</div>
-            <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:${balance>=0?'var(--accent)':'var(--danger)'};">${fmt(balance)}</div>
-          </div>
+  <div style="background:white;border:1px solid #e3e8f5;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(99,102,241,0.08);">
+
+    <!-- Report Header -->
+    <div style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);padding:28px 32px;color:white;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:2px;opacity:0.8;text-transform:uppercase;margin-bottom:6px;">Personal Finance Report</div>
+          <div style="font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.5px;">${getMonthLabel()}</div>
+          <div style="font-size:13px;opacity:0.75;margin-top:4px;">Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
         </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:13px;font-weight:600;color:var(--muted);">Savings Rate</span>
-          <span style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:${savingsRate>=20?'var(--income-color)':savingsRate>=10?'var(--warning)':'var(--expense-color)'};">${savingsRate}%</span>
+        <div style="text-align:right;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:0.75;text-transform:uppercase;margin-bottom:4px;">Net Balance</div>
+          <div style="font-family:'Outfit',sans-serif;font-size:32px;font-weight:700;">${balance>=0?'+':''}${fmt(balance)}</div>
+          <div style="font-size:12px;opacity:0.75;margin-top:2px;">Savings rate: ${savingsRate}%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-bottom:1px solid #e3e8f5;">
+      <div style="padding:20px 24px;border-right:1px solid #e3e8f5;">
+        <div style="font-size:11px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Income</div>
+        <div style="font-family:'Outfit',sans-serif;font-size:24px;font-weight:700;color:#10b981;">${fmt(income)}</div>
+        <div style="font-size:12px;color:#8b93b8;margin-top:4px;">${incTxs.length} transaction${incTxs.length!==1?'s':''}</div>
+      </div>
+      <div style="padding:20px 24px;border-right:1px solid #e3e8f5;">
+        <div style="font-size:11px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Expenses</div>
+        <div style="font-family:'Outfit',sans-serif;font-size:24px;font-weight:700;color:#ef4444;">${fmt(expense)}</div>
+        <div style="font-size:12px;color:#8b93b8;margin-top:4px;">${expTxs.length} transaction${expTxs.length!==1?'s':''}</div>
+      </div>
+      <div style="padding:20px 24px;">
+        <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Daily Avg Spend</div>
+        <div style="font-family:'Outfit',sans-serif;font-size:24px;font-weight:700;color:#6366f1;">${fmt(dailyAvg)}</div>
+        <div style="font-size:12px;color:#8b93b8;margin-top:4px;">per day this month</div>
+      </div>
+    </div>
+
+    <!-- Key Insights -->
+    <div style="padding:20px 24px;border-bottom:1px solid #e3e8f5;background:#f7f9ff;">
+      <div style="font-size:11px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Key Insights</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+        ${biggest ? `<div style="background:white;border:1px solid #e3e8f5;border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;">
+          <span style="font-size:22px;">💸</span>
+          <div><div style="font-size:11px;color:#8b93b8;font-weight:600;">Biggest Expense</div>
+          <div style="font-size:13px;font-weight:700;color:#1e2140;">${biggest.name.slice(0,22)}</div>
+          <div style="font-size:12px;color:#ef4444;font-weight:700;">${fmt(biggest.amount)}</div></div>
+        </div>` : ''}
+        ${topCat ? `<div style="background:white;border:1px solid #e3e8f5;border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;">
+          <span style="font-size:22px;">${CAT_EMOJI[topCat[0]]||'📝'}</span>
+          <div><div style="font-size:11px;color:#8b93b8;font-weight:600;">Most Frequent</div>
+          <div style="font-size:13px;font-weight:700;color:#1e2140;">${topCat[0]}</div>
+          <div style="font-size:12px;color:#6366f1;font-weight:700;">${topCat[1]} transactions</div></div>
+        </div>` : ''}
+        <div style="background:white;border:1px solid #e3e8f5;border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;">
+          <span style="font-size:22px;">${savingsRate>=20?'🎉':savingsRate>=10?'👍':savingsRate>0?'⚠️':'🔴'}</span>
+          <div><div style="font-size:11px;color:#8b93b8;font-weight:600;">Financial Health</div>
+          <div style="font-size:13px;font-weight:700;color:#1e2140;">${savingsRate>=20?'Excellent':savingsRate>=10?'Good':savingsRate>0?'Fair':'Needs Attention'}</div>
+          <div style="font-size:12px;font-weight:700;color:${savingsRate>=20?'#10b981':savingsRate>=10?'#f59e0b':'#ef4444'};">Saving ${savingsRate}% of income</div></div>
         </div>
       </div>
     </div>
 
     <!-- Expense Breakdown -->
     ${catEntries.length ? `
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title">💸 Expenses by Category</span></div>
-      <div class="card-body">
-        ${catEntries.map(([cat,val]) => {
-          const pct = Math.round((val/expense)*100);
-          const color = CAT_COLORS[cat]||'#94a3b8';
-          return `<div style="margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-              <span style="font-size:13px;font-weight:600;">${CAT_EMOJI[cat]||'📝'} ${cat}</span>
-              <div style="display:flex;gap:12px;align-items:center;">
-                <span style="font-size:13px;font-weight:700;">${fmt(val)}</span>
-                <span style="font-size:12px;color:var(--muted);font-weight:600;min-width:32px;text-align:right;">${pct}%</span>
-              </div>
+    <div style="padding:20px 24px;border-bottom:1px solid #e3e8f5;">
+      <div style="font-size:11px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Expense Breakdown</div>
+      ${catEntries.map(([cat,val]) => {
+        const pct = Math.round((val/expense)*100);
+        const color = CAT_COLORS[cat]||'#94a3b8';
+        const catTxCount = expTxs.filter(t=>t.category===cat).length;
+        return `<div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+              <span style="font-size:13px;font-weight:600;">${cat}</span>
+              <span style="font-size:11px;color:#8b93b8;font-weight:500;">${catTxCount} txn${catTxCount!==1?'s':''}</span>
             </div>
-            <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;">
-              <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width 0.5s ease;"></div>
+            <div style="display:flex;align-items:center;gap:16px;">
+              <span style="font-size:13px;font-weight:700;">${fmt(val)}</span>
+              <span style="font-size:12px;color:#8b93b8;font-weight:600;min-width:34px;text-align:right;">${pct}%</span>
             </div>
-          </div>`;
-        }).join('')}
-      </div>
+          </div>
+          <div style="height:7px;background:#eef1fb;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;"></div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>` : ''}
 
     <!-- Income Sources -->
     ${Object.keys(incomeCats).length ? `
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title">💰 Income Sources</span></div>
-      <div class="card-body">
+    <div style="padding:20px 24px;border-bottom:1px solid #e3e8f5;">
+      <div style="font-size:11px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Income Sources</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
         ${Object.entries(incomeCats).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-            <span style="font-size:18px;">${CAT_EMOJI[cat]||'💰'}</span>
-            <span style="font-size:13px;font-weight:600;flex:1;">${cat}</span>
-            <span style="font-size:14px;font-weight:700;color:var(--income-color);">+${fmt(val)}</span>
+          <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px;">
+            <div style="font-size:20px;margin-bottom:6px;">${CAT_EMOJI[cat]||'💰'}</div>
+            <div style="font-size:12px;color:#8b93b8;font-weight:600;">${cat}</div>
+            <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:#10b981;">${fmt(val)}</div>
           </div>`).join('')}
       </div>
     </div>` : ''}
 
-    <!-- All Transactions -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">📋 All Transactions (${txs.length})</span>
+    <!-- All Transactions Table -->
+    <div style="padding:20px 24px;">
+      <div style="font-size:11px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">All Transactions — ${txs.length} total</div>
+
+      <!-- Table Header -->
+      <div style="display:grid;grid-template-columns:90px 1fr 120px 80px;gap:8px;padding:8px 12px;background:#f7f9ff;border-radius:8px;margin-bottom:4px;">
+        <span style="font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:0.5px;">Date</span>
+        <span style="font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:0.5px;">Description</span>
+        <span style="font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:0.5px;">Category</span>
+        <span style="font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:0.5px;text-align:right;">Amount</span>
       </div>
-      <div class="card-body" style="max-height:500px;overflow-y:auto;">
-        ${txs.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t => `
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
-            <div style="font-size:11px;font-weight:600;color:var(--muted);min-width:60px;">${fmtDate(t.date)}</div>
-            <div style="font-size:18px;">${CAT_EMOJI[t.category]||'📝'}</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">${t.name}</div>
-              <div style="font-size:11px;color:var(--muted);">${t.category}</div>
-            </div>
-            <div style="font-size:13px;font-weight:700;color:${t.type==='income'?'var(--income-color)':'var(--expense-color)'};">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
-          </div>`).join('')}
+
+      <!-- Transaction Rows - ALL of them, no scroll limit -->
+      ${txs.slice().sort((a,b)=>b.date.localeCompare(a.date)).map((t,i) => `
+        <div style="display:grid;grid-template-columns:90px 1fr 120px 80px;gap:8px;padding:9px 12px;background:${i%2===0?'white':'#f7f9ff'};border-radius:6px;align-items:center;">
+          <span style="font-size:11px;font-weight:600;color:#8b93b8;">${fmtDate(t.date)}</span>
+          <span style="font-size:13px;font-weight:600;color:#1e2140;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${t.name}">${t.name}</span>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span style="font-size:14px;">${CAT_EMOJI[t.category]||'📝'}</span>
+            <span style="font-size:11px;color:#8b93b8;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.category}</span>
+          </div>
+          <span style="font-size:13px;font-weight:700;text-align:right;color:${t.type==='income'?'#10b981':'#ef4444'};">${t.type==='income'?'+':'-'}${fmt(t.amount)}</span>
+        </div>`).join('')}
+
+      <!-- Table Footer -->
+      <div style="display:grid;grid-template-columns:90px 1fr 120px 80px;gap:8px;padding:10px 12px;background:#eef0fe;border-radius:8px;margin-top:4px;border:1px solid #c4b5fd;">
+        <span style="font-size:11px;font-weight:700;color:#6366f1;grid-column:1/3;">TOTAL (${txs.length} transactions)</span>
+        <span></span>
+        <span style="font-size:13px;font-weight:700;text-align:right;color:${balance>=0?'#10b981':'#ef4444'};">${balance>=0?'+':''}${fmt(balance)}</span>
       </div>
-    </div>`;
+    </div>
+
+  </div>`;
 }
 
 function printReport() {
-  const content = document.getElementById('report-content')?.innerHTML;
-  if (!content) { alert('No report to print. Please navigate to a month with transactions.'); return; }
+  const txs = currentMonthTx();
+  if (!txs.length) { alert('No transactions found for ' + getMonthLabel()); return; }
+
+  const income  = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const balance = income - expense;
+  const savingsRate = income > 0 ? Math.round((balance/income)*100) : 0;
+  const expTxs  = txs.filter(t=>t.type==='expense');
+  const incTxs  = txs.filter(t=>t.type==='income');
+  const cats = {};
+  expTxs.forEach(t=>cats[t.category]=(cats[t.category]||0)+t.amount);
+  const catEntries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const incomeCats = {};
+  incTxs.forEach(t=>incomeCats[t.category]=(incomeCats[t.category]||0)+t.amount);
+  const biggest = expTxs.reduce((a,b)=>b.amount>a.amount?b:a, expTxs[0]||{name:'N/A',amount:0});
+  const dailyAvg = expense / new Date(state.currentYear, state.currentMonth+1, 0).getDate();
+  const catCount = {};
+  expTxs.forEach(t=>catCount[t.category]=(catCount[t.category]||0)+1);
+  const topCat = Object.entries(catCount).sort((a,b)=>b[1]-a[1])[0]||['N/A',0];
+
   const win = window.open('', '_blank');
-  win.document.write(`
-    <!DOCTYPE html><html><head>
-    <title>Ledger Report — ${getMonthLabel()}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-      * { box-sizing:border-box; margin:0; padding:0; }
-      body { font-family:'Plus Jakarta Sans',sans-serif; color:#1e2140; background:white; padding:32px; max-width:800px; margin:0 auto; }
-      h1 { font-family:'Outfit',sans-serif; font-size:26px; font-weight:700; margin-bottom:4px; }
-      .sub { font-size:13px; color:#8b93b8; margin-bottom:24px; }
-      .card { background:white; border:1px solid #e3e8f5; border-radius:12px; overflow:hidden; margin-bottom:16px; }
-      .card-header { padding:12px 16px; background:#f7f9ff; border-bottom:1px solid #e3e8f5; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#8b93b8; }
-      .card-body { padding:16px; }
-      .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
-      .summary-box { border-radius:10px; padding:14px; text-align:center; }
-      .summary-box .label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
-      .summary-box .value { font-family:'Outfit',sans-serif; font-size:22px; font-weight:700; }
-      .income-box { background:#ecfdf5; border:1px solid #a7f3d0; }
-      .income-box .label, .income-box .value { color:#10b981; }
-      .expense-box { background:#fef2f2; border:1px solid #fecaca; }
-      .expense-box .label, .expense-box .value { color:#ef4444; }
-      .balance-box { background:#eef0fe; border:1px solid #c4b5fd; }
-      .balance-box .label { color:#6366f1; }
-      .tx-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f0f4ff; font-size:12px; }
-      .tx-date { color:#8b93b8; min-width:60px; font-weight:600; }
-      .tx-name { flex:1; font-weight:600; }
-      .tx-cat { color:#8b93b8; font-size:11px; }
-      .tx-amt-income { color:#10b981; font-weight:700; }
-      .tx-amt-expense { color:#ef4444; font-weight:700; }
-      .cat-bar-bg { height:5px; background:#e3e8f5; border-radius:3px; overflow:hidden; margin-top:5px; }
-      .cat-bar-fill { height:100%; border-radius:3px; }
-      .cat-row { margin-bottom:10px; }
-      .cat-row-header { display:flex; justify-content:space-between; font-size:12px; font-weight:600; }
-      @media print { body { padding:16px; } }
-    </style>
-    </head><body>
-    <h1>Ledger — Monthly Report</h1>
-    <div class="sub">${getMonthLabel()} · Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
-    ${content}
-    <script>window.onload=()=>window.print();<\/script>
-    </body></html>`);
+  win.document.write(`<!DOCTYPE html><html><head>
+  <meta charset="UTF-8">
+  <title>Ledger Report — ${getMonthLabel()}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Plus Jakarta Sans',sans-serif;color:#1e2140;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .page{max-width:800px;margin:0 auto;padding:32px;}
+    /* Header */
+    .report-header{background:linear-gradient(135deg,#6366f1,#818cf8);color:white;padding:32px;border-radius:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;}
+    .report-header .title-block .eyebrow{font-size:10px;font-weight:700;letter-spacing:2px;opacity:0.8;text-transform:uppercase;margin-bottom:6px;}
+    .report-header .title-block .month{font-family:'Outfit',sans-serif;font-size:30px;font-weight:700;}
+    .report-header .title-block .date{font-size:12px;opacity:0.75;margin-top:4px;}
+    .report-header .balance-block{text-align:right;}
+    .report-header .balance-block .bal-label{font-size:10px;font-weight:700;opacity:0.75;text-transform:uppercase;letter-spacing:1px;}
+    .report-header .balance-block .bal-value{font-family:'Outfit',sans-serif;font-size:34px;font-weight:700;}
+    .report-header .balance-block .bal-rate{font-size:12px;opacity:0.75;margin-top:2px;}
+    /* Summary row */
+    .summary-row{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #e3e8f5;border-radius:16px;overflow:hidden;margin-bottom:20px;}
+    .summary-cell{padding:18px 20px;}
+    .summary-cell:not(:last-child){border-right:1px solid #e3e8f5;}
+    .summary-cell .s-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+    .summary-cell .s-value{font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;}
+    .summary-cell .s-sub{font-size:11px;color:#8b93b8;margin-top:3px;}
+    .inc .s-label,.inc .s-value{color:#10b981;}
+    .exp .s-label,.exp .s-value{color:#ef4444;}
+    .avg .s-label,.avg .s-value{color:#6366f1;}
+    /* Insights */
+    .section-title{font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+    .insights-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
+    .insight-card{border:1px solid #e3e8f5;border-radius:12px;padding:14px;display:flex;gap:10px;align-items:flex-start;}
+    .insight-card .i-icon{font-size:22px;flex-shrink:0;}
+    .insight-card .i-label{font-size:10px;color:#8b93b8;font-weight:600;margin-bottom:3px;}
+    .insight-card .i-value{font-size:13px;font-weight:700;color:#1e2140;}
+    .insight-card .i-sub{font-size:11px;font-weight:700;margin-top:2px;}
+    /* Breakdown */
+    .section{border:1px solid #e3e8f5;border-radius:16px;overflow:hidden;margin-bottom:20px;}
+    .section-header{padding:14px 20px;background:#f7f9ff;border-bottom:1px solid #e3e8f5;}
+    .section-body{padding:16px 20px;}
+    .cat-row{margin-bottom:12px;}
+    .cat-row-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+    .cat-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;}
+    .cat-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+    .cat-count{font-size:11px;color:#8b93b8;}
+    .cat-right{display:flex;gap:16px;align-items:center;}
+    .cat-amt{font-size:13px;font-weight:700;}
+    .cat-pct{font-size:11px;color:#8b93b8;font-weight:600;min-width:32px;text-align:right;}
+    .bar-bg{height:7px;background:#eef1fb;border-radius:4px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:4px;}
+    /* Income grid */
+    .income-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+    .income-card{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px;}
+    .income-card .ic-icon{font-size:20px;margin-bottom:5px;}
+    .income-card .ic-label{font-size:11px;color:#6b7280;font-weight:600;}
+    .income-card .ic-value{font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:#10b981;}
+    /* Table */
+    .tx-table{width:100%;border-collapse:collapse;}
+    .tx-table th{font-size:10px;font-weight:700;color:#8b93b8;text-transform:uppercase;letter-spacing:0.5px;padding:8px 10px;background:#f7f9ff;text-align:left;}
+    .tx-table th:last-child{text-align:right;}
+    .tx-table td{padding:9px 10px;font-size:12px;border-bottom:1px solid #f0f4ff;vertical-align:middle;}
+    .tx-table td:last-child{text-align:right;font-weight:700;}
+    .tx-table tr:last-child td{border-bottom:none;}
+    .tx-table tr:nth-child(even) td{background:#f7f9ff;}
+    .tx-footer td{background:#eef0fe!important;font-weight:700;color:#6366f1;border-top:2px solid #c4b5fd!important;}
+    .tx-footer td:last-child{color:${balance>=0?'#10b981':'#ef4444'};}
+    .badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:5px;font-weight:600;}
+    .badge-exp{background:#fef2f2;color:#ef4444;}
+    .badge-inc{background:#ecfdf5;color:#10b981;}
+    /* Footer */
+    .report-footer{margin-top:24px;padding-top:16px;border-top:1px solid #e3e8f5;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#8b93b8;}
+    @media print{
+      body{padding:0;}
+      .page{padding:20px;max-width:100%;}
+      @page{margin:10mm;size:A4;}
+    }
+  </style>
+  </head><body><div class="page">
+
+  <!-- Header -->
+  <div class="report-header">
+    <div class="title-block">
+      <div class="eyebrow">Personal Finance Report</div>
+      <div class="month">${getMonthLabel()}</div>
+      <div class="date">Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+    </div>
+    <div class="balance-block">
+      <div class="bal-label">Net Balance</div>
+      <div class="bal-value">${balance>=0?'+':''}${fmt(balance)}</div>
+      <div class="bal-rate">Savings Rate: ${savingsRate}%</div>
+    </div>
+  </div>
+
+  <!-- Summary Row -->
+  <div class="summary-row">
+    <div class="summary-cell inc">
+      <div class="s-label">Total Income</div>
+      <div class="s-value">${fmt(income)}</div>
+      <div class="s-sub">${incTxs.length} transaction${incTxs.length!==1?'s':''}</div>
+    </div>
+    <div class="summary-cell exp">
+      <div class="s-label">Total Expenses</div>
+      <div class="s-value">${fmt(expense)}</div>
+      <div class="s-sub">${expTxs.length} transaction${expTxs.length!==1?'s':''}</div>
+    </div>
+    <div class="summary-cell avg">
+      <div class="s-label">Daily Avg Spend</div>
+      <div class="s-value">${fmt(dailyAvg)}</div>
+      <div class="s-sub">per day this month</div>
+    </div>
+  </div>
+
+  <!-- Key Insights -->
+  <div class="section-title">Key Insights</div>
+  <div class="insights-grid">
+    <div class="insight-card">
+      <div class="i-icon">💸</div>
+      <div>
+        <div class="i-label">Biggest Expense</div>
+        <div class="i-value">${biggest.name?.slice(0,20)||'N/A'}</div>
+        <div class="i-sub" style="color:#ef4444;">${fmt(biggest.amount)}</div>
+      </div>
+    </div>
+    <div class="insight-card">
+      <div class="i-icon">${CAT_EMOJI[topCat[0]]||'📝'}</div>
+      <div>
+        <div class="i-label">Most Frequent</div>
+        <div class="i-value">${topCat[0]}</div>
+        <div class="i-sub" style="color:#6366f1;">${topCat[1]} transactions</div>
+      </div>
+    </div>
+    <div class="insight-card">
+      <div class="i-icon">${savingsRate>=20?'🎉':savingsRate>=10?'👍':savingsRate>0?'⚠️':'🔴'}</div>
+      <div>
+        <div class="i-label">Financial Health</div>
+        <div class="i-value">${savingsRate>=20?'Excellent':savingsRate>=10?'Good':savingsRate>0?'Fair':'Needs Attention'}</div>
+        <div class="i-sub" style="color:${savingsRate>=20?'#10b981':savingsRate>=10?'#f59e0b':'#ef4444'};">Saving ${savingsRate}% of income</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expense Breakdown -->
+  ${catEntries.length ? `
+  <div class="section" style="margin-bottom:20px;">
+    <div class="section-header"><div class="section-title" style="margin:0;">💸 Expense Breakdown</div></div>
+    <div class="section-body">
+      ${catEntries.map(([cat,val])=>{
+        const pct=Math.round((val/expense)*100);
+        const color=CAT_COLORS[cat]||'#94a3b8';
+        const cnt=expTxs.filter(t=>t.category===cat).length;
+        return `<div class="cat-row">
+          <div class="cat-row-header">
+            <div class="cat-name"><span class="cat-dot" style="background:${color}"></span>${cat}<span class="cat-count">(${cnt})</span></div>
+            <div class="cat-right"><span class="cat-amt">${fmt(val)}</span><span class="cat-pct">${pct}%</span></div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>` : ''}
+
+  <!-- Income Sources -->
+  ${Object.keys(incomeCats).length ? `
+  <div class="section" style="margin-bottom:20px;">
+    <div class="section-header"><div class="section-title" style="margin:0;">💰 Income Sources</div></div>
+    <div class="section-body">
+      <div class="income-grid">
+        ${Object.entries(incomeCats).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`
+          <div class="income-card">
+            <div class="ic-icon">${CAT_EMOJI[cat]||'💰'}</div>
+            <div class="ic-label">${cat}</div>
+            <div class="ic-value">${fmt(val)}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>` : ''}
+
+  <!-- All Transactions -->
+  <div class="section">
+    <div class="section-header"><div class="section-title" style="margin:0;">📋 All Transactions (${txs.length})</div></div>
+    <div class="section-body" style="padding:0 0 0 0;">
+      <table class="tx-table">
+        <thead><tr>
+          <th>Date</th><th>Description</th><th>Category</th><th>Type</th><th>Amount</th>
+        </tr></thead>
+        <tbody>
+          ${txs.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`
+            <tr>
+              <td style="color:#8b93b8;white-space:nowrap;">${fmtDate(t.date)}</td>
+              <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.name}</td>
+              <td>${CAT_EMOJI[t.category]||'📝'} ${t.category}</td>
+              <td><span class="badge ${t.type==='income'?'badge-inc':'badge-exp'}">${t.type==='income'?'↑ Income':'↓ Expense'}</span></td>
+              <td style="color:${t.type==='income'?'#10b981':'#ef4444'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</td>
+            </tr>`).join('')}
+          <tr class="tx-footer">
+            <td colspan="3" style="font-weight:700;color:#6366f1;">TOTAL — ${txs.length} transactions</td>
+            <td></td>
+            <td>${balance>=0?'+':''}${fmt(balance)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="report-footer">
+    <span>Ledger Personal Finance · ${getMonthLabel()} Report</span>
+    <span>Generated ${new Date().toLocaleDateString()}</span>
+  </div>
+
+  </div>
+  <script>window.onload=()=>{setTimeout(()=>window.print(),500);}<\/script>
+  </body></html>`);
   win.document.close();
 }
 
